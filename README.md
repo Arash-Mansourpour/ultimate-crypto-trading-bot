@@ -1,7 +1,7 @@
 # Ultimate Crypto Trading Bot
 
-![Crypto Trading Bot Banner](https://img.shields.io/badge/Python-3.12%2B-blue?style=flat&logo=python)  
-![License](https://img.shields.io/badge/License-MIT-green?style=flat)  
+![Python](https://img.shields.io/badge/Python-3.12%2B-blue?style=flat&logo=python)  
+![License](https://img.shields.io/badge/License-Apache_2.0-green?style=flat)  
 ![Telegram Bot](https://img.shields.io/badge/Telegram-Bot-blue?style=flat&logo=telegram)  
 ![Stars](https://img.shields.io/github/stars/Arash-Mansourpour/ultimate-crypto-trading-bot?style=flat)  
 
@@ -105,7 +105,7 @@ Please follow code style guidelines (PEP8) and include tests where applicable. F
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
