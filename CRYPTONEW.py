@@ -50,11 +50,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration
-TELEGRAM_TOKEN = "7946390053:AAFu9Ac-hamijaCDjVpESlLfQYuZ86HJ0PY"
-GROQ_API_KEY = "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"
-CMC_API_KEY = "6f754f9e-af16-4017-8993-6ae8cf67c1b1"
-GOOGLE_API_KEY = "AIzaSyA8NV_u2tlPSRY8-jFanhW1AFby-wlA7Qs"
-SEARCH_ENGINE_ID = "53d8a73eb43a44a77"
+TELEGRAM_TOKEN = "000"
+GROQ_API_KEY = "000"
+CMC_API_KEY = "000"
+GOOGLE_API_KEY = "000"
+SEARCH_ENGINE_ID = "000"
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 
@@ -2306,4 +2306,5 @@ if __name__ == "__main__":
         logger.info("\n👋 Bot shutdown complete")
     except Exception as e:
         logger.error(f"💥 Fatal error: {e}")
+
         sys.exit(1)
