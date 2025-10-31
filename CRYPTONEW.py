@@ -50,11 +50,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration
-TELEGRAM_TOKEN = "000"
-GROQ_API_KEY = "000"
-CMC_API_KEY = "000"
-GOOGLE_API_KEY = "000"
-SEARCH_ENGINE_ID = "000"
+TELEGRAM_TOKEN = "Your API key"
+GROQ_API_KEY = "Your API key"
+CMC_API_KEY = "Your API key"
+GOOGLE_API_KEY = "Your API key"
+SEARCH_ENGINE_ID = "Your API key"
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 
@@ -2308,3 +2308,4 @@ if __name__ == "__main__":
         logger.error(f"💥 Fatal error: {e}")
 
         sys.exit(1)
+
