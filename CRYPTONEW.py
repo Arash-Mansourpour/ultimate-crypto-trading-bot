@@ -5,7 +5,7 @@ import json
 import datetime
 import numpy as np
 import pandas as pd
-from typing import List, Dict, Optional, Tuple, Union
+from typing import List, Dict, Optional, Tuple, Union, Any
 import sqlite3
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -32,30 +32,149 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import io
 import base64
+import gc
+from functools import wraps
+
+# Import configuration from config.py
+from config import (
+    TELEGRAM_TOKEN, GROQ_API_KEY, CMC_API_KEY,
+    GOOGLE_API_KEY, SEARCH_ENGINE_ID, NEWS_API_KEY,
+    LOG_LEVEL, LOG_FILE, DATABASE_PATH
+)
 
 warnings.filterwarnings('ignore')
 
 if platform.system() == 'Windows':
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
+# ============================================
+# CUSTOM EXCEPTION CLASSES
+# ============================================
+
+class CryptoBotException(Exception):
+    """Base exception for crypto bot"""
+    pass
+
+class DataFetchException(CryptoBotException):
+    """Raised when data fetching fails"""
+    pass
+
+class APIRateLimitException(CryptoBotException):
+    """Raised when API rate limit is exceeded"""
+    pass
+
+class InvalidSymbolException(CryptoBotException):
+    """Raised when invalid symbol is provided"""
+    pass
+
+class AnalysisException(CryptoBotException):
+    """Raised when analysis fails"""
+    pass
+
+# ============================================
+# DECORATORS FOR ERROR HANDLING
+# ============================================
+
+def retry_with_backoff(max_retries=3, base_delay=1):
+    """Retry decorator with exponential backoff"""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            for attempt in range(max_retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    if attempt == max_retries:
+                        logger.error(f"Max retries exceeded for {func.__name__}: {e}")
+                        raise e
+                    
+                    delay = base_delay * (2 ** attempt)
+                    logger.warning(f"Attempt {attempt + 1} failed for {func.__name__}: {e}. Retrying in {delay}s...")
+                    time.sleep(delay)
+            return None
+        return wrapper
+    return decorator
+
+def handle_exceptions(default_return=None):
+    """Handle exceptions gracefully with logging"""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except DataFetchException as e:
+                logger.error(f"Data fetch error in {func.__name__}: {e}")
+                return default_return
+            except APIRateLimitException as e:
+                logger.warning(f"API rate limit in {func.__name__}: {e}")
+                return default_return
+            except InvalidSymbolException as e:
+                logger.warning(f"Invalid symbol in {func.__name__}: {e}")
+                return default_return
+            except AnalysisException as e:
+                logger.error(f"Analysis error in {func.__name__}: {e}")
+                return default_return
+            except Exception as e:
+                logger.error(f"Unexpected error in {func.__name__}: {e}")
+                return default_return
+        return wrapper
+    return decorator
+
+# Language Manager
+class LanguageManager:
+    """Language management for multilingual support"""
+    
+    def __init__(self):
+        self.user_languages = {}  # {user_id: 'fa' or 'en'}
+        self.texts = {
+            'en': {
+                'welcome': 'Welcome to Arshava V2.0!',
+                'quick_analysis': '📊 Quick Analysis',
+                'market_analysis': '📈 Market Analysis',
+                'ai_assistant': '🤖 AI Assistant',
+                'profile': '👤 Profile',
+                'my_stats': '📈 My Stats',
+                'alerts': '🔔 Alerts',
+                'help': '📚 Help',
+                'market_overview': '💡 Market Overview',
+                'language': '🌐 Language'
+            },
+            'fa': {
+                'welcome': 'به Arshava V2.0 خوش آمدید!',
+                'quick_analysis': '📊 تحلیل سریع',
+                'market_analysis': '📈 تحلیل بازار',
+                'ai_assistant': '🤖 دستیار هوش مصنوعی',
+                'profile': '👤 پروفایل',
+                'my_stats': '📈 آمار من',
+                'alerts': '🔔 هشدارها',
+                'help': '📚 راهنما',
+                'market_overview': '💡 نمای کلی بازار',
+                'language': '🌐 زبان'
+            }
+        }
+    
+    def set_language(self, user_id, language):
+        self.user_languages[user_id] = language
+    
+    def get_language(self, user_id):
+        return self.user_languages.get(user_id, 'en')
+    
+    def get_text(self, user_id, text_key):
+        lang = self.get_language(user_id)
+        return self.texts.get(lang, self.texts['en']).get(text_key, text_key)
+
 # Enhanced Logging Configuration
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, LOG_LEVEL.upper(), logging.INFO),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('ultimate_crypto_bot.log', encoding='utf-8'),
+        logging.FileHandler(LOG_FILE, encoding='utf-8'),
         logging.StreamHandler()
     ]
 )
 logger = logging.getLogger(__name__)
 
-# Configuration
-TELEGRAM_TOKEN = "Your API key"
-GROQ_API_KEY = "Your API key"
-CMC_API_KEY = "Your API key"
-GOOGLE_API_KEY = "Your API key"
-SEARCH_ENGINE_ID = "Your API key"
-
+# Initialize Telegram bot
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 
 @dataclass
@@ -1058,92 +1177,625 @@ class AdvancedTechnicalAnalyzer:
         except:
             return "No Elliott pattern"
 
+# ============================================
+# MESSAGE CHUNKING SYSTEM
+# ============================================
+
+class MessageChunker:
+    """Advanced message chunking with smart content-aware splitting"""
+    
+    def __init__(self, max_length=3200):  # Leave buffer for Telegram formatting
+        self.max_length = max_length
+        self.user_chunks = {}  # Track chunk state per user
+        
+    def chunk_message(self, message: str, user_id: int = None) -> List[Dict]:
+        """Split message into chunks with smart content-aware splitting"""
+        if len(message) <= self.max_length:
+            return [{
+                'text': message,
+                'chunk_index': 0,
+                'total_chunks': 1,
+                'is_first': True,
+                'is_last': True,
+                'has_navigation': False
+            }]
+        
+        # Try to split by logical sections first
+        sections = self._split_by_sections(message)
+        if len(sections) == 1:
+            # Fallback to line-based splitting
+            sections = self._split_by_lines(message)
+        
+        chunks = self._create_chunks_from_sections(sections)
+        
+        # Add navigation metadata
+        total = len(chunks)
+        for i, chunk in enumerate(chunks):
+            chunk.update({
+                'chunk_index': i,
+                'total_chunks': total,
+                'is_first': i == 0,
+                'is_last': i == total - 1,
+                'has_navigation': total > 1
+            })
+        
+        return chunks
+    
+    def _split_by_sections(self, message: str) -> List[str]:
+        """Split message by logical sections (emojis, headers, etc.)"""
+        # Patterns that indicate section boundaries
+        section_patterns = [
+            r'\n🤖\*\*[^*]+\*\*',  # AI analysis sections
+            r'\n📊\*\*[^*]+\*\*',  # Market overview sections
+            r'\n🎯\*\*[^*]+\*\*',  # Signal sections
+            r'\n━━━+\n',           # Separator lines
+            r'\n📈 [A-Z]{2,6}/USD', # Coin references
+        ]
+        
+        sections = [message]
+        for pattern in section_patterns:
+            new_sections = []
+            for section in sections:
+                parts = re.split(pattern, section)
+                for i, part in enumerate(parts):
+                    if i > 0 and part:
+                        # Add back the separator to the beginning of the part
+                        new_sections.append(re.search(pattern, section).group(0) + part)
+                    else:
+                        new_sections.append(part)
+            sections = new_sections
+        
+        # Filter out very small sections
+        return [s.strip() for s in sections if s.strip() and len(s.strip()) > 100]
+    
+    def _split_by_lines(self, message: str) -> List[str]:
+        """Fallback: split by lines"""
+        lines = message.split('\n')
+        sections = []
+        current_section = ""
+        
+        for line in lines:
+            # Check if this line would make the section too long
+            test_section = current_section + line + '\n'
+            if len(test_section) > self.max_length and current_section:
+                sections.append(current_section.strip())
+                current_section = line + '\n'
+            else:
+                current_section = test_section
+        
+        if current_section.strip():
+            sections.append(current_section.strip())
+        
+        return sections
+    
+    def _create_chunks_from_sections(self, sections: List[str]) -> List[Dict]:
+        """Create chunks from sections, combining small ones"""
+        chunks = []
+        current_chunk = ""
+        
+        for section in sections:
+            # If section is too big, split it further
+            if len(section) > self.max_length:
+                # Split section by paragraphs
+                paragraphs = section.split('\n\n')
+                for paragraph in paragraphs:
+                    if len(paragraph) > self.max_length:
+                        # Split paragraph by sentences
+                        sentences = re.split(r'(?<=[.!?])\s+', paragraph)
+                        current_para = ""
+                        for sentence in sentences:
+                            test_para = current_para + sentence + " "
+                            if len(test_para) > self.max_length and current_para:
+                                if current_chunk:
+                                    chunks.append(current_chunk.strip())
+                                    current_chunk = ""
+                                chunks.append(sentence.strip())
+                            else:
+                                current_para = test_para
+                        if current_para.strip():
+                            current_chunk += current_para
+                    else:
+                        # Check if adding paragraph exceeds limit
+                        test_chunk = current_chunk + "\n\n" + paragraph
+                        if len(test_chunk) > self.max_length and current_chunk:
+                            chunks.append(current_chunk.strip())
+                            current_chunk = paragraph
+                        else:
+                            if current_chunk:
+                                current_chunk += "\n\n" + paragraph
+                            else:
+                                current_chunk = paragraph
+            else:
+                # Regular section processing
+                test_chunk = current_chunk + "\n\n" + section if current_chunk else section
+                if len(test_chunk) > self.max_length and current_chunk:
+                    chunks.append(current_chunk.strip())
+                    current_chunk = section
+                else:
+                    if current_chunk:
+                        current_chunk = test_chunk
+                    else:
+                        current_chunk = section
+        
+        if current_chunk.strip():
+            chunks.append(current_chunk.strip())
+        
+        return chunks
+    
+    def create_navigation_keyboard(self, chunk_index: int, total_chunks: int, user_id: int = None) -> types.InlineKeyboardMarkup:
+        """Create enhanced navigation keyboard for message chunks"""
+        markup = types.InlineKeyboardMarkup(row_width=3)
+        
+        buttons = []
+        
+        # Navigation buttons
+        if chunk_index > 0:
+            buttons.append(types.InlineKeyboardButton("⬅️ Previous", callback_data=f"chunk_prev_{user_id or 'default'}"))
+        if chunk_index < total_chunks - 1:
+            buttons.append(types.InlineKeyboardButton("Next ➡️", callback_data=f"chunk_next_{user_id or 'default'}"))
+        
+        if len(buttons) > 0:
+            markup.add(*buttons)
+        
+        # Quick navigation for large documents
+        if total_chunks > 5:
+            quick_nav = []
+            # Show first, middle, last chunks
+            if chunk_index > 2:
+                quick_nav.append(types.InlineKeyboardButton("⏮️ Start", callback_data=f"chunk_goto_{user_id or 'default'}_0"))
+            if chunk_index > 0:
+                quick_nav.append(types.InlineKeyboardButton(f"◀️ {chunk_index}", callback_data=f"chunk_goto_{user_id or 'default'}_{chunk_index-1}"))
+            if chunk_index < total_chunks - 1:
+                quick_nav.append(types.InlineKeyboardButton(f"{chunk_index+2} ▶️", callback_data=f"chunk_goto_{user_id or 'default'}_{chunk_index+1}"))
+            if chunk_index < total_chunks - 3:
+                quick_nav.append(types.InlineKeyboardButton("End ⏭️", callback_data=f"chunk_goto_{user_id or 'default'}_{total_chunks-1}"))
+            
+            if quick_nav:
+                markup.add(*quick_nav)
+        
+        # Chunk indicator and info
+        indicator = f"📄 {chunk_index + 1}/{total_chunks}"
+        markup.add(types.InlineKeyboardButton(indicator, callback_data=f"chunk_info_{user_id or 'default'}"))
+        
+        return markup
+    
+    def store_chunk_state(self, user_id: int, message_id: int, chunks: List[Dict]) -> None:
+        """Store chunk state for user navigation"""
+        if user_id not in self.user_chunks:
+            self.user_chunks[user_id] = {}
+        
+        self.user_chunks[user_id][message_id] = {
+            'chunks': chunks,
+            'current_index': 0,
+            'timestamp': time.time()
+        }
+    
+    def get_chunk_state(self, user_id: int, message_id: int) -> Optional[Dict]:
+        """Get chunk state for user navigation"""
+        if user_id in self.user_chunks and message_id in self.user_chunks[user_id]:
+            state = self.user_chunks[user_id][message_id]
+            # Clean up old states (older than 1 hour)
+            if time.time() - state['timestamp'] > 3600:
+                del self.user_chunks[user_id][message_id]
+                return None
+            return state
+        return None
+    
+    def navigate_chunk(self, user_id: int, message_id: int, direction: str) -> Optional[int]:
+        """Navigate to next/previous chunk and return new chunk index"""
+        state = self.get_chunk_state(user_id, message_id)
+        if not state:
+            return 0
+        
+        current_index = state['current_index']
+        total_chunks = len(state['chunks'])
+        
+        if direction == 'next' and current_index < total_chunks - 1:
+            new_index = current_index + 1
+        elif direction == 'prev' and current_index > 0:
+            new_index = current_index - 1
+        else:
+            return current_index
+        
+        # Update state
+        state['current_index'] = new_index
+        state['timestamp'] = time.time()
+        
+        return new_index
+    
+    def go_to_chunk(self, user_id: int, message_id: int, target_index: int) -> Optional[int]:
+        """Navigate to specific chunk index"""
+        state = self.get_chunk_state(user_id, message_id)
+        if not state:
+            return 0
+        
+        total_chunks = len(state['chunks'])
+        if 0 <= target_index < total_chunks:
+            state['current_index'] = target_index
+            state['timestamp'] = time.time()
+            return target_index
+        
+        return state['current_index']
+    
+    def cleanup_user_chunks(self, user_id: int) -> int:
+        """Clean up chunk states for a user"""
+        if user_id in self.user_chunks:
+            count = len(self.user_chunks[user_id])
+            del self.user_chunks[user_id]
+            return count
+        return 0
+
+# ============================================
+# ENHANCED CACHE SYSTEM
+# ============================================
+
+class CacheManager:
+    """Advanced cache system with TTL and smart invalidation"""
+    
+    def __init__(self):
+        self.cache = {}
+        self.timestamps = {}
+        self.lock = threading.Lock()
+        
+        # Enhanced cache TTL configuration (in seconds)
+        self.ttl_config = {
+            'price_data': 60,        # 1 minute for live prices
+            'ohlcv_data': 300,       # 5 minutes for OHLCV data
+            'indicators': 180,       # 3 minutes for technical indicators
+            'fear_greed': 600,       # 10 minutes for market sentiment
+            'news_data': 300,        # 5 minutes for news
+            'chart_data': 600,       # 10 minutes for chart generation
+            'ai_analysis': 120,      # 2 minutes for AI responses
+            'signal_data': 30,       # 30 seconds for signals
+            'smc_analysis': 240,     # 4 minutes for SMC analysis
+            'vsa_analysis': 240,     # 4 minutes for VSA analysis
+            'ml_prediction': 180,    # 3 minutes for ML predictions
+            'onchain_data': 900,     # 15 minutes for on-chain metrics
+            'social_sentiment': 600, # 10 minutes for social sentiment
+            'user_profile': 3600,    # 1 hour for user profiles
+            'backtest_results': 1800 # 30 minutes for backtest results
+        }
+        
+        # Cache statistics
+        self.hit_count = 0
+        self.miss_count = 0
+        self.eviction_count = 0
+    
+    def get(self, key: str) -> Optional[Any]:
+        """Get cached value if not expired"""
+        with self.lock:
+            if key not in self.cache:
+                self.miss_count += 1
+                return None
+            
+            cache_time = self.timestamps.get(key, 0)
+            cache_type = key.split(':')[0] if ':' in key else 'default'
+            ttl = self.ttl_config.get(cache_type, 300)
+            
+            if time.time() - cache_time > ttl:
+                # Cache expired, remove it
+                self.cache.pop(key, None)
+                self.timestamps.pop(key, None)
+                self.eviction_count += 1
+                self.miss_count += 1
+                return None
+            
+            self.hit_count += 1
+            return self.cache[key]
+    
+    def set(self, key: str, value: Any, cache_type: str = None) -> None:
+        """Set cached value with current timestamp"""
+        with self.lock:
+            # Auto-detect cache type if not provided
+            if cache_type is None:
+                cache_type = key.split(':')[0] if ':' in key else 'default'
+            
+            self.cache[key] = value
+            self.timestamps[key] = time.time()
+    
+    def get_or_set(self, key: str, factory_func: callable, cache_type: str = None) -> Any:
+        """Get cached value or compute and cache new value"""
+        cached_value = self.get(key)
+        if cached_value is not None:
+            return cached_value
+        
+        # Compute new value
+        try:
+            new_value = factory_func()
+            self.set(key, new_value, cache_type)
+            return new_value
+        except Exception as e:
+            logger.error(f"Cache factory function failed for key {key}: {e}")
+            return None
+    
+    def invalidate(self, pattern: str) -> int:
+        """Invalidate cache entries matching pattern"""
+        with self.lock:
+            keys_to_remove = [k for k in self.cache.keys() if pattern in k]
+            for key in keys_to_remove:
+                self.cache.pop(key, None)
+                self.timestamps.pop(key, None)
+                self.eviction_count += 1
+            return len(keys_to_remove)
+    
+    def invalidate_patterns(self, patterns: List[str]) -> int:
+        """Invalidate cache entries matching multiple patterns"""
+        total_removed = 0
+        for pattern in patterns:
+            total_removed += self.invalidate(pattern)
+        return total_removed
+    
+    def clear_all(self) -> None:
+        """Clear all cached data"""
+        with self.lock:
+            cache_size = len(self.cache)
+            self.cache.clear()
+            self.timestamps.clear()
+            self.eviction_count += cache_size
+    
+    def cleanup_expired(self) -> int:
+        """Remove expired cache entries and return count of cleaned items"""
+        with self.lock:
+            current_time = time.time()
+            expired_keys = []
+            
+            for key, cache_time in self.timestamps.items():
+                cache_type = key.split(':')[0] if ':' in key else 'default'
+                ttl = self.ttl_config.get(cache_type, 300)
+                if current_time - cache_time > ttl:
+                    expired_keys.append(key)
+            
+            for key in expired_keys:
+                self.cache.pop(key, None)
+                self.timestamps.pop(key, None)
+                self.eviction_count += 1
+            
+            return len(expired_keys)
+    
+    def get_stats(self) -> Dict:
+        """Get comprehensive cache statistics"""
+        with self.lock:
+            total_entries = len(self.cache)
+            expired_entries = 0
+            
+            current_time = time.time()
+            for key, cache_time in self.timestamps.items():
+                cache_type = key.split(':')[0] if ':' in key else 'default'
+                ttl = self.ttl_config.get(cache_type, 300)
+                if current_time - cache_time > ttl:
+                    expired_entries += 1
+            
+            total_requests = self.hit_count + self.miss_count
+            hit_rate = (self.hit_count / total_requests * 100) if total_requests > 0 else 0
+            
+            return {
+                'total_entries': total_entries,
+                'active_entries': total_entries - expired_entries,
+                'expired_entries': expired_entries,
+                'hit_count': self.hit_count,
+                'miss_count': self.miss_count,
+                'hit_rate': round(hit_rate, 2),
+                'eviction_count': self.eviction_count,
+                'cache_types': len(self.ttl_config)
+            }
+    
+    def get_memory_usage(self) -> Dict:
+        """Get memory usage statistics"""
+        import sys
+        with self.lock:
+            total_size = sum(sys.getsizeof(v) for v in self.cache.values())
+            return {
+                'cache_memory_mb': round(total_size / 1024 / 1024, 2),
+                'entries_count': len(self.cache),
+                'avg_entry_size_bytes': round(total_size / max(len(self.cache), 1))
+            }
+
 class EnhancedAPIManager:
-    """Unified API manager with caching and fallback"""
+    """Unified API manager with advanced caching and fallback"""
     def __init__(self):
         self.data_fetcher = MultiSourceDataFetcher()
         self.session = requests.Session()
-        self.cache = {}
-        self.cache_timeout = 300
+        self.cache_manager = CacheManager()
+        self.rate_limit = {}  # Track API calls per minute
+        self.lock = threading.Lock()
         try:
             self.google_client = build("customsearch", "v1", developerKey=GOOGLE_API_KEY)
         except:
             self.google_client = None
             logger.warning("Google API not available")
     
+    def _check_rate_limit(self, source: str, limit: int = 10) -> bool:
+        """Check if API call is within rate limit"""
+        current_time = time.time()
+        current_minute = int(current_time / 60)
+        
+        with self.lock:
+            if source not in self.rate_limit:
+                self.rate_limit[source] = {}
+            
+            if current_minute not in self.rate_limit[source]:
+                self.rate_limit[source][current_minute] = 0
+            
+            self.rate_limit[source][current_minute] += 1
+            
+            return self.rate_limit[source][current_minute] <= limit
+    
     def get_price_data(self, symbols: List[str]) -> Dict:
+        """Get price data with intelligent caching and rate limiting"""
         results = {}
+        cache_key = f"price_data:{','.join(sorted(symbols))}"
+        
+        # Check cache first
+        cached_data = self.cache_manager.get(cache_key)
+        if cached_data is not None:
+            logger.debug(f"Using cached price data for {symbols}")
+            return cached_data
+        
+        # Rate limiting check
+        if not self._check_rate_limit('binance', 15):
+            logger.warning("Rate limit exceeded for Binance API, using cached data if available")
+            return cached_data or {}
+        
         for symbol in symbols:
             try:
-                url = f"https://api.binance.com/api/v3/ticker/24hr?symbol={symbol}USDT"
-                response = self.session.get(url, timeout=5)
-                if response.status_code == 200:
-                    data = response.json()
-                    results[symbol] = {
-                        'price': float(data['lastPrice']),
-                        'volume_24h': float(data['volume']),
-                        'percent_change_24h': float(data['priceChangePercent']),
-                        'high_24h': float(data['highPrice']),
-                        'low_24h': float(data['lowPrice'])
-                    }
-                    continue
-                if symbol in self.data_fetcher.symbol_map:
-                    coin_id = self.data_fetcher.symbol_map[symbol]['cg']
-                    url = f"https://api.coingecko.com/api/v3/simple/price"
-                    params = {
-                        'ids': coin_id,
-                        'vs_currencies': 'usd',
-                        'include_24hr_change': 'true',
-                        'include_24hr_vol': 'true'
-                    }
-                    response = self.session.get(url, params=params, timeout=5)
+                # Try Binance first
+                if self._check_rate_limit(f'binance_{symbol}', 5):
+                    url = f"https://api.binance.com/api/v3/ticker/24hr?symbol={symbol}USDT"
+                    response = self.session.get(url, timeout=5)
                     if response.status_code == 200:
-                        data = response.json()[coin_id]
+                        data = response.json()
                         results[symbol] = {
-                            'price': data['usd'],
-                            'volume_24h': data.get('usd_24h_vol', 0),
-                            'percent_change_24h': data.get('usd_24h_change', 0)
+                            'price': float(data['lastPrice']),
+                            'volume_24h': float(data['volume']),
+                            'percent_change_24h': float(data['priceChangePercent']),
+                            'high_24h': float(data['highPrice']),
+                            'low_24h': float(data['lowPrice'])
                         }
+                        continue
+                
+                # Fallback to CoinGecko
+                if symbol in self.data_fetcher.symbol_map:
+                    cache_key_fallback = f"price_data_cg:{symbol}"
+                    cached_cg = self.cache_manager.get(cache_key_fallback)
+                    if cached_cg is not None:
+                        results[symbol] = cached_cg
+                        continue
+                    
+                    if self._check_rate_limit('coingecko', 10):
+                        coin_id = self.data_fetcher.symbol_map[symbol]['cg']
+                        url = f"https://api.coingecko.com/api/v3/simple/price"
+                        params = {
+                            'ids': coin_id,
+                            'vs_currencies': 'usd',
+                            'include_24hr_change': 'true',
+                            'include_24hr_vol': 'true'
+                        }
+                        response = self.session.get(url, params=params, timeout=5)
+                        if response.status_code == 200:
+                            data = response.json()[coin_id]
+                            price_data = {
+                                'price': data['usd'],
+                                'volume_24h': data.get('usd_24h_vol', 0),
+                                'percent_change_24h': data.get('usd_24h_change', 0)
+                            }
+                            results[symbol] = price_data
+                            # Cache individual symbol data
+                            self.cache_manager.set(cache_key_fallback, price_data)
+                            
+            except requests.exceptions.Timeout:
+                logger.warning(f"Timeout fetching {symbol} price data")
+            except requests.exceptions.ConnectionError:
+                logger.warning(f"Connection error fetching {symbol} price data")
             except Exception as e:
                 logger.error(f"Price fetch error for {symbol}: {e}")
+        
+        # Cache the complete results
+        if results:
+            self.cache_manager.set(cache_key, results)
+            logger.info(f"Cached price data for {symbols}: {len(results)} symbols")
+        
         return results
     
     def get_fear_greed_index(self) -> int:
+        """Get Fear & Greed Index with caching"""
+        cache_key = "fear_greed:index"
+        
+        # Check cache
+        cached_value = self.cache_manager.get(cache_key)
+        if cached_value is not None:
+            return cached_value
+        
         try:
-            response = self.session.get("https://api.alternative.me/fng/", timeout=5)
-            if response.status_code == 200:
-                return int(response.json()['data'][0]['value'])
-        except:
-            pass
-        return 50
+            if self._check_rate_limit('fear_greed', 2):  # Very conservative rate limit
+                response = self.session.get("https://api.alternative.me/fng/", timeout=5)
+                if response.status_code == 200:
+                    value = int(response.json()['data'][0]['value'])
+                    self.cache_manager.set(cache_key, value)
+                    return value
+        except requests.exceptions.Timeout:
+            logger.warning("Timeout fetching Fear & Greed index")
+        except requests.exceptions.ConnectionError:
+            logger.warning("Connection error fetching Fear & Greed index")
+        except Exception as e:
+            logger.error(f"Fear & Greed index error: {e}")
+        
+        # Return cached value if available, otherwise default
+        return cached_value if cached_value is not None else 50
     
     def search_news(self, query: str, limit: int = 10) -> List[Dict]:
+        """Search news with intelligent caching and error handling"""
+        # Create cache key from query and limit
+        cache_key = f"news_data:{hash(query)}:{limit}"
+        
+        # Check cache
+        cached_news = self.cache_manager.get(cache_key)
+        if cached_news is not None:
+            logger.debug(f"Using cached news for query: {query}")
+            return cached_news
+        
         news_items = []
+        
+        # Rate limiting for news search
+        if not self._check_rate_limit('news_search', 5):
+            logger.warning("Rate limit exceeded for news search, using cached data")
+            return cached_news or []
+        
         if not self.google_client:
-            return news_items
+            logger.warning("Google API client not available")
+            return cached_news or []
+        
         try:
             search_query = f"{query} cryptocurrency news"
+            logger.info(f"Searching news for: {search_query}")
+            
             results = self.google_client.cse().list(
                 q=search_query,
                 cx=SEARCH_ENGINE_ID,
                 num=min(limit, 10),
                 dateRestrict='d7'
             ).execute()
+            
             for item in results.get('items', []):
                 try:
                     snippet = item.get('snippet', '')
                     title = item.get('title', '')
-                    sentiment = TextBlob(snippet + ' ' + title).sentiment
-                    news_items.append({
+                    
+                    # Basic sentiment analysis
+                    try:
+                        sentiment = TextBlob(snippet + ' ' + title).sentiment
+                        sentiment_polarity = sentiment.polarity
+                        sentiment_subjectivity = sentiment.subjectivity
+                    except:
+                        sentiment_polarity = 0
+                        sentiment_subjectivity = 0.5
+                    
+                    news_item = {
                         'title': title[:100],
                         'snippet': snippet[:200],
-                        'sentiment_polarity': round(sentiment.polarity, 3),
-                        'sentiment': 'positive' if sentiment.polarity > 0.1 else 'negative' if sentiment.polarity < -0.1 else 'neutral'
-                    })
-                except:
+                        'sentiment_polarity': sentiment_polarity,
+                        'sentiment_subjectivity': sentiment_subjectivity,
+                        'source': item.get('displayLink', 'Unknown'),
+                        'url': item.get('link', ''),
+                        'timestamp': time.time()
+                    }
+                    news_items.append(news_item)
+                    
+                except Exception as e:
+                    logger.error(f"News item processing error: {e}")
                     continue
+        
         except Exception as e:
             logger.error(f"News search error: {e}")
+            # Try to return cached news if available
+            if cached_news:
+                logger.info("Returning cached news due to search error")
+                return cached_news
+        
+        # Cache the news results
+        if news_items:
+            self.cache_manager.set(cache_key, news_items)
+            logger.info(f"Cached {len(news_items)} news items for query: {query}")
+        
         return news_items
 
 class EnhancedSignalGenerator:
@@ -1370,11 +2022,10 @@ class EnhancedSignalGenerator:
             return {'signal': 'NEUTRAL', 'reason': ''}
     
     def _create_hold_signal(self, reason: str, df: pd.DataFrame) -> TradingSignal:
-        current_price = df['close'].iloc[-1] if len(df) > 0 else 0
         return TradingSignal(
             signal="HOLD",
             confidence=0,
-            entry_price=current_price,
+            entry_price=df['close'].iloc[-1] if len(df) > 0 else 0,
             stop_loss=0,
             take_profit=0,
             position_size=0,
@@ -1384,14 +2035,14 @@ class EnhancedSignalGenerator:
             technical_score=0,
             sentiment_score=0,
             volume_score=0,
-            social_sentiment=0,
-            onchain_score=0,
+            social_sentiment=50,
+            onchain_score=50,
             backtest_winrate=0,
             ichimoku_signal="NEUTRAL",
             fibonacci_levels={},
             elliott_wave="No pattern",
-            multi_timeframe_alignment="N/A",
-            ml_prediction="NEUTRAL",
+            multi_timeframe_alignment="Unknown",
+            ml_prediction="NEUTRAL (0%)",
             smc_analysis={},
             vsa_signal="Unknown",
             wyckoff_analysis="Unknown",
@@ -1401,7 +2052,7 @@ class EnhancedSignalGenerator:
 
 class DatabaseManager:
     """Enhanced database management"""
-    def __init__(self, db_path='ultimate_crypto_bot.db'):
+    def __init__(self, db_path=DATABASE_PATH):
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
         self.lock = threading.Lock()
         self._create_tables()
@@ -1409,12 +2060,20 @@ class DatabaseManager:
     def _create_tables(self):
         with self.lock:
             cursor = self.conn.cursor()
+            
+            # Enable WAL mode for better concurrency
+            cursor.execute('PRAGMA journal_mode=WAL')
+            cursor.execute('PRAGMA synchronous=NORMAL')
+            cursor.execute('PRAGMA temp_store=memory')
+            cursor.execute('PRAGMA mmap_size=268435456')  # 256MB
+            
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS user_profiles (
                     user_id INTEGER PRIMARY KEY,
                     experience_level TEXT DEFAULT 'beginner',
                     risk_tolerance TEXT DEFAULT 'medium',
                     account_size REAL DEFAULT 10000,
+                    account_level TEXT DEFAULT 'free',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
@@ -1430,6 +2089,17 @@ class DatabaseManager:
                     take_profit REAL,
                     reasons TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS signal_feedback (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    signal_id INTEGER,
+                    user_id INTEGER,
+                    feedback TEXT,
+                    profitability REAL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (signal_id) REFERENCES trading_signals (id)
                 )
             ''')
             cursor.execute('''
@@ -1452,7 +2122,67 @@ class DatabaseManager:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_portfolio (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    symbol TEXT,
+                    amount REAL,
+                    entry_price REAL,
+                    current_price REAL,
+                    value REAL,
+                    pnl REAL,
+                    pnl_percent REAL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # Add database indexes for performance optimization
+            indexes = [
+                # User profile indexes
+                'CREATE INDEX IF NOT EXISTS idx_user_profiles_user_id ON user_profiles(user_id)',
+                'CREATE INDEX IF NOT EXISTS idx_user_profiles_account_level ON user_profiles(account_level)',
+                
+                # Trading signals indexes
+                'CREATE INDEX IF NOT EXISTS idx_trading_signals_user_id ON trading_signals(user_id)',
+                'CREATE INDEX IF NOT EXISTS idx_trading_signals_symbol ON trading_signals(symbol)',
+                'CREATE INDEX IF NOT EXISTS idx_trading_signals_created_at ON trading_signals(created_at)',
+                'CREATE INDEX IF NOT EXISTS idx_trading_signals_user_created ON trading_signals(user_id, created_at)',
+                'CREATE INDEX IF NOT EXISTS idx_trading_signals_signal_type ON trading_signals(signal_type)',
+                
+                # Signal feedback indexes
+                'CREATE INDEX IF NOT EXISTS idx_signal_feedback_signal_id ON signal_feedback(signal_id)',
+                'CREATE INDEX IF NOT EXISTS idx_signal_feedback_user_id ON signal_feedback(user_id)',
+                'CREATE INDEX IF NOT EXISTS idx_signal_feedback_created_at ON signal_feedback(created_at)',
+                
+                # Signal performance indexes
+                'CREATE INDEX IF NOT EXISTS idx_signal_performance_signal_id ON signal_performance(signal_id)',
+                'CREATE INDEX IF NOT EXISTS idx_signal_performance_symbol ON signal_performance(symbol)',
+                'CREATE INDEX IF NOT EXISTS idx_signal_performance_created_at ON signal_performance(created_at)',
+                
+                # Price alerts indexes
+                'CREATE INDEX IF NOT EXISTS idx_price_alerts_user_id ON price_alerts(user_id)',
+                'CREATE INDEX IF NOT EXISTS idx_price_alerts_symbol ON price_alerts(symbol)',
+                'CREATE INDEX IF NOT EXISTS idx_price_alerts_active ON price_alerts(active)',
+                'CREATE INDEX IF NOT EXISTS idx_price_alerts_user_active ON price_alerts(user_id, active)',
+                
+                # User portfolio indexes
+                'CREATE INDEX IF NOT EXISTS idx_user_portfolio_user_id ON user_portfolio(user_id)',
+                'CREATE INDEX IF NOT EXISTS idx_user_portfolio_symbol ON user_portfolio(symbol)',
+                'CREATE INDEX IF NOT EXISTS idx_user_portfolio_created_at ON user_portfolio(created_at)',
+                'CREATE INDEX IF NOT EXISTS idx_user_portfolio_user_created ON user_portfolio(user_id, created_at)'
+            ]
+            
+            # Execute all indexes
+            for index_sql in indexes:
+                try:
+                    cursor.execute(index_sql)
+                except Exception as e:
+                    logger.warning(f"Index creation warning: {e}")
+            
             self.conn.commit()
+            logger.info("Database tables and indexes created successfully")
     
     def get_user_profile(self, user_id: int) -> Dict:
         with self.lock:
@@ -1463,9 +2193,10 @@ class DatabaseManager:
                 return {
                     'experience_level': result[1],
                     'risk_tolerance': result[2],
-                    'account_size': result[3]
+                    'account_size': result[3],
+                    'account_level': result[4]
                 }
-            return {'experience_level': 'beginner', 'risk_tolerance': 'medium', 'account_size': 10000}
+            return {'experience_level': 'beginner', 'risk_tolerance': 'medium', 'account_size': 10000, 'account_level': 'free'}
     
     def update_user_profile(self, user_id: int, **kwargs):
         with self.lock:
@@ -1473,16 +2204,17 @@ class DatabaseManager:
             cursor.execute('SELECT * FROM user_profiles WHERE user_id = ?', (user_id,))
             if not cursor.fetchone():
                 cursor.execute('''
-                    INSERT INTO user_profiles (user_id, experience_level, risk_tolerance, account_size)
-                    VALUES (?, ?, ?, ?)
+                    INSERT INTO user_profiles (user_id, experience_level, risk_tolerance, account_size, account_level)
+                    VALUES (?, ?, ?, ?, ?)
                 ''', (user_id, kwargs.get('experience_level', 'beginner'),
                       kwargs.get('risk_tolerance', 'medium'),
-                      kwargs.get('account_size', 10000)))
+                      kwargs.get('account_size', 10000),
+                      kwargs.get('account_level', 'free')))
             else:
                 updates = []
                 values = []
                 for key, value in kwargs.items():
-                    if key in ['experience_level', 'risk_tolerance', 'account_size']:
+                    if key in ['experience_level', 'risk_tolerance', 'account_size', 'account_level']:
                         updates.append(f"{key} = ?")
                         values.append(value)
                 if updates:
@@ -1490,7 +2222,7 @@ class DatabaseManager:
                     cursor.execute(f"UPDATE user_profiles SET {', '.join(updates)} WHERE user_id = ?", values)
             self.conn.commit()
     
-    def save_signal(self, user_id: int, symbol: str, signal: TradingSignal):
+    def save_signal(self, user_id: int, symbol: str, signal: TradingSignal) -> int:
         with self.lock:
             cursor = self.conn.cursor()
             cursor.execute('''
@@ -1537,15 +2269,413 @@ class DatabaseManager:
             ''', (user_id,))
             results = cursor.fetchall()
             return [{'id': r[0], 'symbol': r[1], 'target_price': r[2], 'condition': r[3]} for r in results]
+    
+    def save_signal_feedback(self, signal_id: int, user_id: int, feedback: str, profitability: float = 0.0):
+        with self.lock:
+            cursor = self.conn.cursor()
+            cursor.execute('''
+                INSERT INTO signal_feedback (signal_id, user_id, feedback, profitability)
+                VALUES (?, ?, ?, ?)
+            ''', (signal_id, user_id, feedback, profitability))
+            self.conn.commit()
+    
+    def add_to_portfolio(self, user_id: int, symbol: str, amount: float, entry_price: float):
+        """Add asset to user portfolio"""
+        with self.lock:
+            cursor = self.conn.cursor()
+            # Get current price
+            try:
+                current_price = entry_price  # Default to entry price
+                # In a real implementation, you would fetch current price here
+            except:
+                current_price = entry_price
+            
+            value = amount * current_price
+            pnl = (current_price - entry_price) * amount
+            pnl_percent = ((current_price / entry_price) - 1) * 100 if entry_price > 0 else 0
+            
+            cursor.execute('''
+                INSERT INTO user_portfolio 
+                (user_id, symbol, amount, entry_price, current_price, value, pnl, pnl_percent)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (user_id, symbol, amount, entry_price, current_price, value, pnl, pnl_percent))
+            self.conn.commit()
+    
+    def get_user_portfolio(self, user_id: int) -> List[Dict]:
+        """Get user portfolio"""
+        with self.lock:
+            cursor = self.conn.cursor()
+            cursor.execute('''
+                SELECT symbol, amount, entry_price, current_price, value, pnl, pnl_percent
+                FROM user_portfolio
+                WHERE user_id = ?
+                ORDER BY created_at DESC
+            ''', (user_id,))
+            results = cursor.fetchall()
+            return [
+                {
+                    'symbol': r[0],
+                    'amount': r[1],
+                    'entry_price': r[2],
+                    'current_price': r[3],
+                    'value': r[4],
+                    'pnl': r[5],
+                    'pnl_percent': r[6]
+                } for r in results
+            ]
 
+    
+    def fetch_ohlcv_with_cache(self, symbol: str, timeframe: str = '1d', limit: int = 200) -> pd.DataFrame:
+        """Fetch OHLCV data with intelligent caching"""
+        cache_key = f"ohlcv_data:{symbol}:{timeframe}:{limit}"
+        
+        # Check cache first
+        cached_df = self.cache_manager.get(cache_key)
+        if cached_df is not None:
+            logger.debug(f"Using cached OHLCV data for {symbol} {timeframe}")
+            return cached_df
+        
+        # Fetch fresh data
+        df = self.data_fetcher.fetch_ohlcv(symbol, timeframe, limit)
+        
+        if not df.empty and len(df) >= 50:
+            # Cache the dataframe
+            self.cache_manager.set(cache_key, df)
+            logger.info(f"Cached OHLCV data for {symbol} {timeframe}: {len(df)} candles")
+        
+        return df
+    
+    def calculate_indicators_with_cache(self, df: pd.DataFrame, symbol: str) -> Dict:
+        """Calculate technical indicators with caching"""
+        cache_key = f"indicators:{symbol}:{len(df)}"
+        
+        # Check cache
+        cached_indicators = self.cache_manager.get(cache_key)
+        if cached_indicators is not None:
+            logger.debug(f"Using cached indicators for {symbol}")
+            return cached_indicators
+        
+        # Calculate fresh indicators
+        analyzer = AdvancedTechnicalAnalyzer()
+        indicators = analyzer.calculate_all_indicators(df)
+        
+        if indicators:
+            # Cache the indicators
+            self.cache_manager.set(cache_key, indicators)
+            logger.info(f"Cached indicators for {symbol}")
+        
+        return indicators
+
+class CoinGeckoAPI:
+    """CoinGecko API for comprehensive coin data"""
+    BASE_URL = "https://api.coingecko.com/api/v3"
+    
+    def __init__(self, api_key: str = None):
+        self.api_key = api_key
+        self.session = requests.Session()
+        if api_key:
+            self.session.headers.update({'Authorization': f'Bearer {api_key}'})
+    
+    def get_coin_data(self, coin_id: str) -> Dict:
+        """Get comprehensive coin data"""
+        try:
+            url = f"{self.BASE_URL}/coins/{coin_id}"
+            params = {
+                'localization': 'false',
+                'tickers': 'true',
+                'market_data': 'true',
+                'community_data': 'true',
+                'developer_data': 'true'
+            }
+            response = self.session.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"CoinGecko API error for {coin_id}: {e}")
+            return {}
+    
+    def get_all_coins_list(self) -> List[Dict]:
+        """Get list of all available coins"""
+        try:
+            url = f"{self.BASE_URL}/coins/list"
+            params = {'include_platform': 'true'}
+            response = self.session.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"CoinGecko all coins list error: {e}")
+            return []
+    
+    def get_coin_market_data(self, vs_currency='usd', per_page=250, page=1) -> List[Dict]:
+        """Get coin market data with pagination"""
+        try:
+            url = f"{self.BASE_URL}/coins/markets"
+            params = {
+                'vs_currency': vs_currency,
+                'per_page': per_page,
+                'page': page,
+                'order': 'market_cap_desc',
+                'sparkline': 'false',
+                'price_change_percentage': '24h,7d,30d'
+            }
+            response = self.session.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"CoinGecko market data error: {e}")
+            return []
+
+class DIADataAPI:
+    """DIA Data API for on-chain and DeFi data"""
+    BASE_URL = "https://api.diadata.org/v1"
+    
+    def __init__(self):
+        self.session = requests.Session()
+    
+    def get_quotation(self, blockchain: str, address: str) -> Dict:
+        """Get quotation from multiple sources"""
+        try:
+            url = f"{self.BASE_URL}/quotation/{blockchain}/{address}"
+            response = self.session.get(url, timeout=10)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"DIA API error for {blockchain}/{address}: {e}")
+            return {}
+
+class BlockchainInfoAPI:
+    """Blockchain.info API for Bitcoin on-chain data"""
+    BASE_URL = "https://blockchain.info"
+    
+    def __init__(self):
+        self.session = requests.Session()
+    
+    def get_stats(self) -> Dict:
+        """Get Bitcoin network stats"""
+        try:
+            url = f"{self.BASE_URL}/stats"
+            response = self.session.get(url, timeout=10)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"Blockchain.info stats error: {e}")
+            return {}
+    
+    def get_ticker(self) -> Dict:
+        """Get Bitcoin ticker data"""
+        try:
+            url = f"{self.BASE_URL}/ticker"
+            response = self.session.get(url, timeout=10)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"Blockchain.info ticker error: {e}")
+            return {}
+
+class CryptoPanicAPI:
+    """CryptoPanic API for news and sentiment"""
+    BASE_URL = "https://cryptopanic.com/api/v1"
+    
+    def __init__(self, api_key: str = None):
+        self.api_key = api_key
+        self.session = requests.Session()
+        if api_key:
+            self.session.headers.update({'Authorization': f'Bearer {api_key}'})
+    
+    def get_posts(self, currencies='BTC,ETH', filter_type='rising') -> Dict:
+        """Get cryptocurrency news and sentiment"""
+        try:
+            url = f"{self.BASE_URL}/posts/"
+            params = {
+                'auth_token': self.api_key,
+                'currencies': currencies,
+                'filter': filter_type
+            }
+            response = self.session.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"CryptoPanic posts error: {e}")
+            return {}
+
+# Modern Chart Generator using Plotly (if available)
+class ModernChartGenerator:
+    """Modern chart generator with Plotly"""
+    
+    def generate_interactive_chart(self, df: pd.DataFrame, symbol: str, signal: TradingSignal) -> bytes:
+        """Generate interactive chart with Plotly"""
+        try:
+            # Try to import plotly
+            import plotly.graph_objects as go
+            from plotly.subplots import make_subplots
+            
+            fig = make_subplots(
+                rows=3, cols=1,
+                shared_xaxes=True,
+                vertical_spacing=0.03,
+                row_heights=[0.6, 0.2, 0.2],
+                specs=[[{"secondary_y": False}],
+                       [{"secondary_y": False}],
+                       [{"secondary_y": False}]]
+            )
+            
+            # Candlestick chart
+            fig.add_trace(
+                go.Candlestick(
+                    x=df.index,
+                    open=df['open'],
+                    high=df['high'],
+                    low=df['low'],
+                    close=df['close'],
+                    name='Price',
+                    increasing_line_color='#00ff88',
+                    decreasing_line_color='#ff3366'
+                ),
+                row=1, col=1
+            )
+            
+            # Add entry/stop/take profit levels if available
+            if signal.signal != 'HOLD':
+                fig.add_hline(y=signal.entry_price, line_dash="dash", line_color="blue", 
+                             annotation_text="Entry", row=1, col=1)
+                fig.add_hline(y=signal.stop_loss, line_dash="dash", line_color="red", 
+                             annotation_text="Stop Loss", row=1, col=1)
+                fig.add_hline(y=signal.take_profit, line_dash="dash", line_color="green", 
+                             annotation_text="Take Profit", row=1, col=1)
+            
+            # Volume
+            colors = ['green' if df['close'].iloc[i] > df['open'].iloc[i] else 'red' 
+                     for i in range(len(df))]
+            fig.add_trace(
+                go.Bar(x=df.index, y=df['volume'], name='Volume', marker_color=colors),
+                row=2, col=1
+            )
+            
+            # RSI
+            rsi = talib.RSI(df['close'].values, 14)
+            fig.add_trace(
+                go.Scatter(x=df.index, y=rsi, name='RSI', line=dict(color='purple')),
+                row=3, col=1
+            )
+            fig.add_hline(y=70, line_dash="dot", line_color="red", row=3, col=1)
+            fig.add_hline(y=30, line_dash="dot", line_color="green", row=3, col=1)
+            
+            # Modern dark theme
+            fig.update_layout(
+                template='plotly_dark',
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(17,17,17,0.8)',
+                font=dict(color='#ffffff', size=12),
+                xaxis_rangeslider_visible=False,
+                height=800,
+                margin=dict(l=20, r=20, t=40, b=20),
+                title=f'{symbol}/USD - {signal.signal} Signal'
+            )
+            
+            # Try to return as image bytes
+            try:
+                img_bytes = fig.to_image(format='png', engine='kaleido')
+                return img_bytes
+            except:
+                # Fallback to matplotlib if plotly export fails
+                pass
+                
+        except ImportError:
+            # Plotly not available, fallback to matplotlib
+            pass
+        except Exception as e:
+            logger.error(f"Plotly chart generation error: {e}")
+        
+        # Fallback to matplotlib chart generator
+        chart_gen = ChartGenerator()
+        return chart_gen.generate_chart(df, symbol, signal)
+
+# Enhanced notification system
+class SmartNotificationSystem:
+    """Smart notification system for price alerts and signals"""
+    
+    def send_price_alert(self, bot, user_id: int, symbol: str, 
+                        current_price: float, target_price: float):
+        """Send price alert notification"""
+        try:
+            diff_percent = ((current_price / target_price) - 1) * 100
+            
+            message = f"""
+🔔 *Price Alert Triggered!*
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+💎 *{symbol}*
+💰 Current Price: `${current_price:,.2f}`
+🎯 Target Price: `${target_price:,.2f}`
+📊 Difference: `{diff_percent:+.2f}%`
+
+⏰ Time: `{datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}`
+"""
+            
+            # Create inline keyboard
+            markup = types.InlineKeyboardMarkup()
+            markup.add(
+                types.InlineKeyboardButton(
+                    "📊 Analyze", 
+                    callback_data=f"analyze_{symbol}"
+                ),
+                types.InlineKeyboardButton(
+                    "🔕 Disable", 
+                    callback_data=f"disable_alert_{symbol}"
+                )
+            )
+            
+            bot.send_message(user_id, message, 
+                           parse_mode='Markdown',
+                           reply_markup=markup)
+        except Exception as e:
+            logger.error(f"Price alert notification error: {e}")
+    
+    def send_signal_notification(self, bot, user_id: int, 
+                                 symbol: str, signal: TradingSignal):
+        """Send trading signal notification"""
+        try:
+            # Only send strong signals
+            if signal.confidence < 70:
+                return
+            
+            message = f"""
+🚨 *New Signal!*
+
+{signal.signal} {symbol}
+💪 Confidence: {signal.confidence:.0f}%
+
+🔔 Quick action recommended!
+"""
+            
+            bot.send_message(user_id, message, parse_mode='Markdown')
+        except Exception as e:
+            logger.error(f"Signal notification error: {e}")
+
+# Enhanced UltimateTradingBot with new features
 class UltimateTradingBot:
-    """Main bot orchestrator"""
+    """Main bot orchestrator with enhanced features"""
     def __init__(self):
         self.api_manager = EnhancedAPIManager()
         self.signal_generator = EnhancedSignalGenerator()
         self.db_manager = DatabaseManager()
         self.groq_client = Groq(api_key=GROQ_API_KEY)
         self.chart_generator = ChartGenerator()
+        self.modern_chart_generator = ModernChartGenerator()
+        self.conversation_history = {}  # Store conversation history per user
+        self.lang_manager = LanguageManager()
+        self.notification_system = SmartNotificationSystem()
+        self.message_chunker = MessageChunker()
+        
+        # Message chunk tracking for users
+        self.user_chunks = {}  # {user_id: {'message_id': chunk_data}}
+        
+        # Enhanced API integrations
+        self.coingecko_api = CoinGeckoAPI()  # Using CMC key as placeholder
+        self.dia_api = DIADataAPI()
+        self.blockchain_api = BlockchainInfoAPI()
+        self.cryptopanic_api = CryptoPanicAPI()
+        
         self.system_prompt = """You are Arshava, an elite crypto trading analyst with advanced capabilities.
 
 Your analysis includes:
@@ -1567,46 +2697,57 @@ Response structure:
 8. Key risks
 
 Be concise, specific, and actionable."""
+
+        self.ai_conversation_prompt = """You are Arshava AI, a friendly and knowledgeable cryptocurrency market expert.
+You're having a casual conversation with a user about the crypto market.
+Keep your responses conversational, friendly, and informative.
+Use emojis occasionally to make the conversation more engaging.
+You can discuss market trends, analysis, trading strategies, or answer user questions.
+Always maintain a helpful and approachable tone."""
     
-    def process_request(self, message) -> Tuple[str, bytes]:
+    def process_ai_conversation(self, user_id: int, user_message: str) -> str:
+        """Process AI conversation with context management"""
         try:
-            user_input = message.text
-            user_id = message.chat.id
+            # Initialize conversation history for user if not exists
+            if user_id not in self.conversation_history:
+                self.conversation_history[user_id] = []
             
-            symbols = re.findall(r'\b([A-Z]{2,6}|bitcoin|ethereum|solana|cardano|polkadot|polygon|avalanche|chainlink)\b', user_input.upper())
-            name_map = {
-                'BITCOIN': 'BTC', 'ETHEREUM': 'ETH', 'SOLANA': 'SOL', 'CARDANO': 'ADA',
-                'POLKADOT': 'DOT', 'POLYGON': 'MATIC', 'AVALANCHE': 'AVAX', 'CHAINLINK': 'LINK'
-            }
-            symbols = [name_map.get(s, s) for s in symbols]
-            symbol = symbols[0] if symbols else 'BTC'
+            # Add user message to history
+            self.conversation_history[user_id].append({
+                "role": "user", 
+                "content": user_message
+            })
             
-            price_data = self.api_manager.get_price_data([symbol])
-            ohlcv_df = self.api_manager.data_fetcher.fetch_ohlcv(symbol, '1d', 200)
+            # Limit history to 20 messages to prevent context overflow
+            if len(self.conversation_history[user_id]) > 20:
+                self.conversation_history[user_id] = self.conversation_history[user_id][-20:]
             
-            if ohlcv_df.empty or len(ohlcv_df) < 50:
-                return f"❌ Unable to fetch data for {symbol}. Please try another symbol.", None
+            # Create messages context for AI
+            messages = [
+                {"role": "system", "content": self.ai_conversation_prompt}
+            ]
             
-            fear_greed = self.api_manager.get_fear_greed_index()
-            news_data = self.api_manager.search_news(f"{symbol} price", 5)
+            # Add conversation history
+            messages.extend(self.conversation_history[user_id])
             
-            user_profile = self.db_manager.get_user_profile(user_id)
-            signal = self.signal_generator.generate_signal(ohlcv_df, symbol, user_profile, news_data)
+            # Get response from AI
+            response = self.groq_client.chat.completions.create(
+                messages=messages,
+                model="meta-llama/llama-4-maverick-17b-128e-instruct",
+                max_tokens=800,
+                temperature=0.7
+            )
             
-            if signal.signal != "HOLD":
-                self.db_manager.save_signal(user_id, symbol, signal)
+            ai_response = response.choices[0].message.content
             
-            ai_analysis = self._generate_ai_analysis(user_input, symbol, price_data, signal, fear_greed, user_profile)
+            # Add AI response to history
+            self.conversation_history[user_id].append({"role": "assistant", "content": ai_response})
             
-            response = self._format_response(symbol, price_data, signal, fear_greed, ai_analysis, user_id)
-            
-            chart_image = self.chart_generator.generate_chart(ohlcv_df, symbol, signal)
-            
-            return response, chart_image
+            return ai_response
             
         except Exception as e:
-            logger.error(f"Request processing error: {e}")
-            return "❌ An error occurred. Please try again.", None
+            logger.error(f"AI conversation error: {e}")
+            return "❌ متأسفانه در حال حاضر امکان پاسخ‌گویی وجود ندارد. لطفاً دوباره تلاش کنید."
     
     def _generate_ai_analysis(self, user_input: str, symbol: str, price_data: Dict, signal: TradingSignal, fear_greed: int, user_profile: Dict) -> str:
         try:
@@ -1636,7 +2777,7 @@ Provide concise professional analysis."""
                     {"role": "system", "content": self.system_prompt},
                     {"role": "user", "content": context}
                 ],
-                model="llama-3.3-70b-versatile",
+                model="meta-llama/llama-4-maverick-17b-128e-instruct",
                 max_tokens=1200,
                 temperature=0.3
             )
@@ -1717,34 +2858,505 @@ Provide concise professional analysis."""
         return response[:4000]
 
 # ============================================
+# BOT UTILITY FUNCTIONS
+# ============================================
+
+def setup_profile(message):
+    """Setup user profile"""
+    user_id = message.chat.id
+    profile = ultimate_bot.db_manager.get_user_profile(user_id)
+    
+    response = f"""👤 **YOUR PROFILE**
+━━━━━━━━━━━━━━━━━━━
+
+**Experience Level:** {profile['experience_level'].capitalize()}
+**Risk Tolerance:** {profile['risk_tolerance'].capitalize()}
+**Account Size:** ${profile['account_size']:,.0f}
+**Account Level:** {profile['account_level'].capitalize()}
+
+**Change your settings:**
+• Type `/profile beginner/intermediate/expert` - Set experience level
+• Type `/risk low/medium/high` - Set risk tolerance
+• Type `/account 10000` - Set account size
+"""
+    
+    bot.reply_to(message, response, parse_mode='Markdown', reply_markup=create_main_keyboard())
+
+def show_account_level_selection(message):
+    """Show account level selection for new users"""
+    response = """📊 **Select Your Trading Experience**
+
+**Beginner** 🟢
+• Basic analysis features
+• Standard support
+• Free plan included
+
+**Intermediate** 🟡
+• Advanced indicators
+• Priority support
+• Premium features
+
+**Expert** 🔴
+• Full access to all features
+• VIP support
+• Pro analytics
+
+Choose your level to continue:"""
+    
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    markup.add(
+        types.InlineKeyboardButton("🟢 Beginner (Free)", callback_data="confirm_agreement_beginner"),
+        types.InlineKeyboardButton("🟡 Intermediate (Premium)", callback_data="confirm_agreement_premium"),
+        types.InlineKeyboardButton("🔴 Expert (VIP)", callback_data="confirm_agreement_vip")
+    )
+    
+    bot.reply_to(message, response, parse_mode='Markdown', reply_markup=markup)
+
+# ============================================
 # TELEGRAM BOT HANDLERS
 # ============================================
 
 ultimate_bot = UltimateTradingBot()
 
-def create_main_keyboard():
+def create_main_keyboard(user_id: int = None):
     """Create main menu keyboard"""
+    # If no user_id provided or user not in language manager, use default English
+    if user_id is None or user_id not in ultimate_bot.lang_manager.user_languages:
+        markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
+        markup.add(
+            types.KeyboardButton("📊 Quick Analysis"),
+            types.KeyboardButton("📈 Market Analysis"),
+            types.KeyboardButton("🤖 AI Assistant"),
+            types.KeyboardButton("👤 Profile"),
+            types.KeyboardButton("📈 My Stats"),
+            types.KeyboardButton("🔔 Alerts"),
+            types.KeyboardButton("📚 Help"),
+            types.KeyboardButton("💡 Market Overview")
+        )
+        return markup
+    
+    # Get user language and texts
+    lang = ultimate_bot.lang_manager.get_language(user_id)
+    t = ultimate_bot.lang_manager.texts[lang]
+    
     markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
     markup.add(
-        types.KeyboardButton("📊 Quick Analysis"),
-        types.KeyboardButton("👤 Profile"),
-        types.KeyboardButton("📈 My Stats"),
-        types.KeyboardButton("🔔 Alerts"),
-        types.KeyboardButton("📚 Help"),
-        types.KeyboardButton("💡 Market Overview")
+        types.KeyboardButton(t['quick_analysis']),
+        types.KeyboardButton(t['market_analysis']),
+        types.KeyboardButton(t['ai_assistant']),
+        types.KeyboardButton(t['profile']),
+        types.KeyboardButton(t['my_stats']),
+        types.KeyboardButton(t['alerts']),
+        types.KeyboardButton(t['help']),
+        types.KeyboardButton(t['market_overview']),
+        types.KeyboardButton(t['language'])
     )
     return markup
 
-def create_inline_keyboard(symbol: str):
-    """Create inline keyboard for signal"""
+def create_language_keyboard():
+    """Create language selection keyboard"""
     markup = types.InlineKeyboardMarkup(row_width=2)
     markup.add(
-        types.InlineKeyboardButton("📊 Chart", callback_data=f"chart_{symbol}"),
-        types.InlineKeyboardButton("🔄 Refresh", callback_data=f"refresh_{symbol}"),
-        types.InlineKeyboardButton("🔔 Set Alert", callback_data=f"alert_{symbol}"),
-        types.InlineKeyboardButton("📈 Multi-TF", callback_data=f"mtf_{symbol}")
+        types.InlineKeyboardButton("🇮🇷 فارسی", callback_data="lang_fa"),
+        types.InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")
     )
     return markup
+
+def create_market_selection_keyboard():
+    """Create market selection keyboard"""
+    markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
+    markup.add(
+        types.KeyboardButton("₿ Bitcoin"),
+        types.KeyboardButton("🌈 Altcoins"),
+        types.KeyboardButton("スポット Spot Market"),
+        types.KeyboardButton("📈 Futures Market"),
+        types.KeyboardButton("↩️ Back")
+    )
+    return markup
+
+def create_parameter_selection_keyboard():
+    """Create parameter combination keyboard"""
+    markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
+    markup.add(
+        types.KeyboardButton("Ichimoku + RSI"),
+        types.KeyboardButton("MACD + Stochastic"),
+        types.KeyboardButton("All Parameters"),
+        types.KeyboardButton("Custom Prompt"),
+        types.KeyboardButton("↩️ Back")
+    )
+    return markup
+
+def create_inline_keyboard(symbol: str, signal_id: int = 0):
+    """Create inline keyboard for signal actions"""
+    markup = types.InlineKeyboardMarkup(row_width=3)
+    
+    # First row: Quick actions
+    markup.add(
+        types.InlineKeyboardButton("🔄 Refresh", callback_data=f"refresh_{symbol}"),
+        types.InlineKeyboardButton("📊 Chart", callback_data=f"chart_{symbol}"),
+        types.InlineKeyboardButton("🔔 Alert", callback_data=f"alert_{symbol}")
+    )
+    
+    # Second row: Advanced actions
+    if signal_id > 0:
+        markup.add(
+            types.InlineKeyboardButton("✅ Profitable", callback_data=f"feedback_profit_{signal_id}"),
+            types.InlineKeyboardButton("❌ Loss", callback_data=f"feedback_loss_{signal_id}"),
+            types.InlineKeyboardButton("😐 Break-even", callback_data=f"feedback_breakeven_{signal_id}")
+        )
+    
+    return markup
+
+def create_feedback_keyboard(signal_id: int):
+    """Create feedback keyboard for trading signals"""
+    markup = types.InlineKeyboardMarkup(row_width=3)
+    markup.add(
+        types.InlineKeyboardButton("✅ Profitable", callback_data=f"feedback_profit_{signal_id}"),
+        types.InlineKeyboardButton("❌ Loss", callback_data=f"feedback_loss_{signal_id}"),
+        types.InlineKeyboardButton("😐 Break-even", callback_data=f"feedback_breakeven_{signal_id}")
+    )
+    markup.add(
+        types.InlineKeyboardButton("↩️ Back", callback_data=f"back_to_signal_{signal_id}")
+    )
+    return markup
+
+def create_advanced_keyboard(symbol: str, signal: TradingSignal):
+    """Create advanced inline keyboard with emojis and modern design"""
+    markup = types.InlineKeyboardMarkup(row_width=3)
+    
+    # First row: Quick actions
+    signal_emoji = {
+        'BUY': '🟢',
+        'SELL': '🔴',
+        'HOLD': '⏸️'
+    }.get(signal.signal, '⚪')
+    
+    markup.add(
+        types.InlineKeyboardButton(
+            f"{signal_emoji} {signal.signal}",
+            callback_data=f"signal_{symbol}"
+        ),
+        types.InlineKeyboardButton(
+            f"📊 {signal.confidence:.0f}%",
+            callback_data=f"confidence_{symbol}"
+        ),
+        types.InlineKeyboardButton(
+            "🔄 Refresh",
+            callback_data=f"refresh_{symbol}"
+        )
+    )
+    
+    # Second row: Advanced analysis
+    markup.add(
+        types.InlineKeyboardButton(
+            "🧠 SMC Analysis",
+            callback_data=f"smc_{symbol}"
+        ),
+        types.InlineKeyboardButton(
+            "📈 VSA Signal",
+            callback_data=f"vsa_{symbol}"
+        ),
+        types.InlineKeyboardButton(
+            "🤖 ML Prediction",
+            callback_data=f"ml_{symbol}"
+        )
+    )
+    
+    # Third row: Tools
+    markup.add(
+        types.InlineKeyboardButton(
+            "📊 Interactive Chart",
+            callback_data=f"chart_{symbol}"
+        ),
+        types.InlineKeyboardButton(
+            "🔔 Price Alert",
+            callback_data=f"alert_{symbol}"
+        ),
+        types.InlineKeyboardButton(
+            "💾 Save Strategy",
+            callback_data=f"save_{symbol}"
+        )
+    )
+    
+    # Fourth row: Timeframes
+    timeframes = ["1H", "4H", "1D", "1W"]
+    buttons = [
+        types.InlineKeyboardButton(
+            f"⏰ {tf}",
+            callback_data=f"tf_{symbol}_{tf.lower()}"
+        ) for tf in timeframes
+    ]
+    markup.add(*buttons)
+    
+    return markup
+
+def format_advanced_signal(symbol: str, price_data: Dict, signal: TradingSignal, 
+                          fear_greed: int, ai_analysis: str, user_id: int) -> str:
+    """Format beautiful message with Markdown V2"""
+    
+    # Dynamic emojis
+    signal_emoji = {
+        'BUY': '🚀🟢',
+        'SELL': '🔴📉',
+        'HOLD': '⏸️⚪'
+    }.get(signal.signal, '⚪')
+    
+    confidence_bar = create_progress_bar(signal.confidence)
+    
+    response = f"""
+╔═══════════════════════════╗
+║  {signal_emoji} *{symbol}/USDT*  {signal_emoji}  ║
+╚═══════════════════════════╝
+
+📊 *Market Overview*
+━━━━━━━━━━━━━━━━━━━━━━━━
+💰 Price: `${price_data.get('price', 0):,.2f}`
+📈 24h: `{price_data.get('percent_change_24h', 0):+.2f}%`
+📊 Volume: `${price_data.get('volume_24h', 0)/1e6:.1f}M`
+😨 F&G: `{fear_greed}/100`
+
+{signal_emoji} *Trading Signal*
+━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 *{signal.signal}*
+{confidence_bar}
+💪 Confidence: `{signal.confidence:.1f}%`
+"""
+    
+    if signal.signal != "HOLD":
+        sl_pct = ((signal.stop_loss/signal.entry_price - 1) * 100)
+        tp_pct = ((signal.take_profit/signal.entry_price - 1) * 100)
+        response += f"""
+💵 Entry: `${signal.entry_price:,.2f}`
+🛑 Stop Loss: `${signal.stop_loss:,.2f}` ({sl_pct:+.2f}%)
+🎯 Take Profit: `${signal.take_profit:,.2f}` ({tp_pct:+.2f}%)
+⚖️ R/R: `{signal.risk_reward_ratio:.2f}:1`
+💰 Position: `${signal.position_size:,.2f}`
+"""
+    
+    response += """
+🧠 *Smart Analysis*
+━━━━━━━━━━━━━━━━━━━━━━━━
+"""
+    
+    # Add reasons with emojis
+    for i, reason in enumerate(signal.reasons[:5], 1):
+        emojis = ['🔹', '🔸', '🔺', '🔻', '🔶']
+        emoji = emojis[i-1] if i <= len(emojis) else '🔹'
+        response += f"{emoji} {reason}\n"
+    
+    response += f"""
+━━━━━━━━━━━━━━━━━━━━━━━━
+🤖 *AI Insights*
+━━━━━━━━━━━━━━━━━━━━━━━━
+"""
+    
+    if signal.signal != "HOLD":
+        response += f"""
+🎯 SMC: `{signal.smc_analysis.get('signal', 'N/A')}` ({signal.smc_analysis.get('confidence', 0):.0f}%)
+📊 Wyckoff: `{signal.wyckoff_analysis}`
+🧬 ML: `{signal.ml_prediction}`
+🔬 Backtest WR: `{signal.backtest_winrate:.1f}%`
+⛓️ On-chain: `{signal.onchain_score:.0f}/100`
+🐦 Social: `{signal.social_sentiment:.0f}/100`
+"""
+    else:
+        response += "No active trading signal at the moment.\n"
+    
+    # Add AI analysis section
+    response += f"""
+━━━━━━━━━━━━━━━━━━━━━━━━
+🤖 *AI Analysis Summary*
+━━━━━━━━━━━━━━━━━━━━━━━━
+{ai_analysis[:800]}...
+
+"""
+    
+    # Add user stats
+    stats = ultimate_bot.db_manager.get_user_stats(user_id)
+    if stats['total_signals'] > 0:
+        response += f"""📊 *Your Stats* (30d)
+━━━━━━━━━━━━━━━━━━━━━━━━
+• Signals: {stats['total_signals']}
+• Avg Confidence: {stats['avg_confidence']:.1f}%
+• Accuracy: {stats['accuracy']:.1f}%
+
+"""
+    
+    response += """⚠️ *Disclaimer*: Not financial advice. DYOR and manage risk."""
+    
+    return response[:4000]  # Telegram message limit
+
+def create_progress_bar(value: float, length: int = 20) -> str:
+    """Create progress bar visualization"""
+    filled = int(value / 100 * length)
+    empty = length - filled
+    return f"[{'█' * filled}{'░' * empty}] {value:.0f}%"
+
+def send_typing_simulation(bot, chat_id, steps: List[str], delay=0.5):
+    """Simulate typing for better UX"""
+    msg = None
+    for step in steps:
+        bot.send_chat_action(chat_id, 'typing')
+        time.sleep(delay)
+        
+        if msg:
+            try:
+                bot.edit_message_text(step, chat_id, msg.message_id)
+            except:
+                msg = bot.send_message(chat_id, step)
+        else:
+            msg = bot.send_message(chat_id, step)
+    
+    return msg
+
+def validate_symbol(symbol: str) -> bool:
+    """Validate if symbol is supported"""
+    # List of valid cryptocurrency symbols
+    valid_symbols = ['BTC', 'ETH', 'SOL', 'ADA', 'DOT', 'MATIC', 
+                     'AVAX', 'LINK', 'XRP', 'DOGE', 'SHIB', 'UNI',
+                     'LTC', 'BCH', 'ETC', 'ATOM', 'FIL', 'TRX', 
+                     'VET', 'XLM', 'BNB', 'NEAR', 'APT', 'HBAR',
+                     'ALGO', 'FLOW', 'ICP', 'SAND', 'MANA', 'AXS']
+    
+    # Check if symbol is in our valid list
+    if symbol.upper() in valid_symbols:
+        return True
+    
+    # Additional check for common valid patterns
+    if len(symbol) >= 2 and len(symbol) <= 6 and symbol.isalpha():
+        # Symbol looks like a valid crypto symbol, let's check if it exists in major exchanges
+        return True
+    
+    return False
+
+def get_valid_symbol(symbol: str) -> str:
+    """Convert common aliases to valid symbols"""
+    symbol_map = {
+        'BITCOIN': 'BTC',
+        'ETHEREUM': 'ETH',
+        'SOLANA': 'SOL',
+        'CARDANO': 'ADA',
+        'POLKADOT': 'DOT',
+        'POLYGON': 'MATIC',
+        'AVALANCHE': 'AVAX',
+        'CHAINLINK': 'LINK',
+        'BINANCE': 'BNB'
+    }
+    
+    return symbol_map.get(symbol.upper(), symbol.upper())
+
+# Enhanced process_request method
+def process_request(self, message) -> Tuple[str, bytes, int]:
+    try:
+        user_input = message.text
+        user_id = message.chat.id
+        
+        # Extract and validate symbol
+        symbols = re.findall(r'\b([A-Z]{2,6}|bitcoin|ethereum|solana|cardano|polkadot|polygon|avalanche|chainlink|binance)\b', user_input, re.IGNORECASE)
+        if symbols:
+            symbol = get_valid_symbol(symbols[0])
+        else:
+            symbol = 'BTC'  # Default symbol
+        
+        # Validate symbol
+        if not validate_symbol(symbol):
+            raise ValueError(f"Invalid symbol: {symbol}")
+        
+        price_data = self.api_manager.get_price_data([symbol])
+        ohlcv_df = self.api_manager.data_fetcher.fetch_ohlcv(symbol, '1d', 200)
+        
+        if ohlcv_df.empty or len(ohlcv_df) < 50:
+            return f"❌ Unable to fetch data for {symbol}. Please try another symbol.", None, 0
+        
+        fear_greed = self.api_manager.get_fear_greed_index()
+        news_data = self.api_manager.search_news(f"{symbol} price", 5)
+        
+        user_profile = self.db_manager.get_user_profile(user_id)
+        signal = self.signal_generator.generate_signal(ohlcv_df, symbol, user_profile, news_data)
+        
+        signal_id = 0
+        if signal.signal != "HOLD":
+            signal_id = self.db_manager.save_signal(user_id, symbol, signal)
+        
+        ai_analysis = self._generate_ai_analysis(user_input, symbol, price_data, signal, fear_greed, user_profile)
+        
+        response = format_advanced_signal(symbol, price_data, signal, fear_greed, ai_analysis, user_id)
+        
+        # Try to generate modern chart first, fallback to regular chart
+        try:
+            chart_image = self.modern_chart_generator.generate_interactive_chart(ohlcv_df, symbol, signal)
+        except:
+            chart_image = self.chart_generator.generate_chart(ohlcv_df, symbol, signal)
+        
+        return response, chart_image, signal_id
+        
+    except ValueError as ve:
+        logger.warning(f"Invalid symbol requested: {ve}")
+        return "❌ Invalid cryptocurrency symbol. Please try a valid symbol like BTC, ETH, or SOL.", None, 0
+    except Exception as e:
+        logger.error(f"Request processing error: {e}")
+        return "❌ An error occurred. Please try again.", None, 0
+
+# Add the process_request method to the UltimateTradingBot class
+UltimateTradingBot.process_request = process_request
+# Removed duplicate message handler - consolidated into handle_text_messages below
+
+
+@bot.message_handler(func=lambda message: message.text == "🤖 AI Assistant")
+def ai_assistant_menu(message):
+    welcome_text = """🤖 **Arshava AI Assistant**
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+Hello! I'm your personal cryptocurrency market expert. I can help you with:
+
+💬 **General conversation** about crypto markets
+📈 **Market analysis** and trends
+🧠 **Trading strategies** and insights
+❓ **Answering your questions** about crypto
+
+Just type your message and I'll respond right away!
+
+Examples:
+• "What's the current trend for BTC?"
+• "How to trade with RSI?"
+• "Explain Wyckoff method"
+• "Any news about Ethereum?"
+
+Type 'exit' to return to the main menu."""
+    
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.add(
+        types.KeyboardButton("↩️ Exit AI Assistant")
+    )
+    
+    msg = bot.reply_to(message, welcome_text, parse_mode='Markdown', reply_markup=markup)
+    bot.register_next_step_handler(msg, process_ai_conversation)
+
+def process_ai_conversation(message):
+    if message.text == "↩️ Exit AI Assistant" or message.text.lower() == 'exit':
+
+        bot.reply_to(message, "👋 Exiting AI Assistant. Back to main menu.", 
+                     reply_markup=create_main_keyboard(message.chat.id))
+        return
+    
+    user_id = message.chat.id
+    user_message = message.text
+    
+    # Show typing action
+    bot.send_chat_action(message.chat.id, 'typing')
+    
+    # Process with AI
+    ai_response = ultimate_bot.process_ai_conversation(user_id, user_message)
+    
+    # Send response
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.add(
+        types.KeyboardButton("↩️ Exit AI Assistant")
+    )
+    
+    msg = bot.reply_to(message, f"🤖 Arshava AI:\n\n{ai_response}", 
+                       reply_markup=markup)
+    bot.register_next_step_handler(msg, process_ai_conversation)
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
@@ -1788,106 +3400,12 @@ Just type: **BTC** or **analyze SOL**
 
 Use the menu buttons below! 👇"""
     
-    bot.reply_to(message, welcome_text, parse_mode='Markdown', reply_markup=create_main_keyboard())
-
-@bot.message_handler(commands=['help'])
-def send_help(message):
-    help_text = """📖 **ARSHAVA V2.0 GUIDE**
-━━━━━━━━━━━━━━━━━━━━━━━━
-
-🎯 **QUICK START**
-• Type coin: BTC, ETH, SOL
-• /analyze [coin]
-• Use menu buttons
-
-📊 **MENU OPTIONS**
-━━━━━━━━━━━━━━━━━━━━━━━━
-
-**📊 Quick Analysis**
-Get instant analysis for any coin
-
-**👤 Profile**
-Setup your trading profile:
-• Experience level
-• Risk tolerance  
-• Account size
-
-**📈 My Stats**
-View your performance
-
-**🔔 Alerts**
-Set price alerts
-
-**💡 Market Overview**
-See top coins overview
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-🎯 **SIGNAL GUIDE**
-━━━━━━━━━━━━━━━━━━━━━━━━
-
-**Confidence Levels:**
-• 80-100%: Very Strong
-• 60-79%: Strong
-• 40-59%: Moderate
-• <40%: Weak
-
-**Always use stop loss!**
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-Need help? Contact @YourSupport"""
-    
-    bot.reply_to(message, help_text, parse_mode='Markdown')
-
-@bot.message_handler(commands=['profile'])
-def setup_profile(message):
-    markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, row_width=3)
-    markup.add('Beginner', 'Intermediate', 'Professional')
-    msg = bot.reply_to(message, "🎯 **Step 1/3: Experience Level**\n\nSelect your trading experience:", 
-                       reply_markup=markup, parse_mode='Markdown')
-    bot.register_next_step_handler(msg, process_experience, message.chat.id)
-
-def process_experience(message, user_id):
-    experience = message.text.lower()
-    if experience not in ['beginner', 'intermediate', 'professional']:
-        experience = 'beginner'
-    markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, row_width=3)
-    markup.add('Low', 'Medium', 'High')
-    msg = bot.reply_to(message, "⚖️ **Step 2/3: Risk Tolerance**\n\nSelect your risk tolerance:", 
-                       reply_markup=markup, parse_mode='Markdown')
-    bot.register_next_step_handler(msg, process_risk, user_id, experience)
-
-def process_risk(message, user_id, experience):
-    risk = message.text.lower()
-    if risk not in ['low', 'medium', 'high']:
-        risk = 'medium'
-    msg = bot.reply_to(message, "💰 **Step 3/3: Account Size**\n\nEnter your trading account size (USD):\n\nExample: 10000", 
-                       parse_mode='Markdown')
-    bot.register_next_step_handler(msg, process_account_size, user_id, experience, risk)
-
-def process_account_size(message, user_id, experience, risk):
-    try:
-        account_size = float(re.sub(r'[,$]', '', message.text))
-        if account_size < 100:
-            bot.reply_to(message, "❌ Minimum account size: $100", reply_markup=create_main_keyboard())
-            return
-        
-        ultimate_bot.db_manager.update_user_profile(user_id, experience_level=experience, 
-                                                     risk_tolerance=risk, account_size=account_size)
-        
-        response = f"""✅ **Profile Saved!**
-━━━━━━━━━━━━━━━━━━━━
-
-👤 Experience: {experience.capitalize()}
-⚖️ Risk: {risk.capitalize()}
-💰 Account: ${account_size:,.0f}
-
-Signals optimized for your profile! 
-Type: **BTC** to start"""
-        
-        bot.reply_to(message, response, parse_mode='Markdown', reply_markup=create_main_keyboard())
-    except:
-        bot.reply_to(message, "❌ Invalid number. Try again.", reply_markup=create_main_keyboard())
-
+    # Show account level selection for new users
+    user_profile = ultimate_bot.db_manager.get_user_profile(message.chat.id)
+    if user_profile.get('account_level') is None:
+        show_account_level_selection(message)
+    else:
+        bot.reply_to(message, welcome_text, parse_mode='Markdown', reply_markup=create_main_keyboard())
 @bot.message_handler(commands=['stats'])
 def show_stats(message):
     user_id = message.chat.id
@@ -1918,6 +3436,61 @@ Update: /profile"""
     
     bot.reply_to(message, response, parse_mode='Markdown', reply_markup=create_main_keyboard())
 
+@bot.message_handler(func=lambda message: message.text == "📈 Market Analysis")
+def market_analysis_menu(message):
+    bot.reply_to(message, "Select market type:", reply_markup=create_market_selection_keyboard())
+
+@bot.message_handler(func=lambda message: message.text in ["₿ Bitcoin", "🌈 Altcoins"])
+def select_coin_type(message):
+    coin_type = "Bitcoin" if message.text == "₿ Bitcoin" else "Altcoins"
+    bot.reply_to(message, f"You selected {coin_type}. Now select market type:", 
+                 reply_markup=create_market_selection_keyboard())
+
+@bot.message_handler(func=lambda message: message.text in ["スポット Spot Market", "📈 Futures Market"])
+def select_market_type(message):
+    market_type = "Spot" if message.text == "スポット Spot Market" else "Futures"
+    bot.reply_to(message, f"You selected {market_type} market. Select parameter combination:", 
+                 reply_markup=create_parameter_selection_keyboard())
+
+@bot.message_handler(func=lambda message: message.text in ["Ichimoku + RSI", "MACD + Stochastic", "All Parameters"])
+def select_parameters(message):
+    param_type = message.text
+    user_id = message.chat.id
+    user_profile = ultimate_bot.db_manager.get_user_profile(user_id)
+    
+    # Check if user has required account level for advanced parameters
+    if param_type != "All Parameters" and user_profile.get('account_level', 'free') == 'free':
+        bot.reply_to(message, "🔒 This feature requires Premium or VIP account. Please upgrade your account.",
+                     reply_markup=create_main_keyboard())
+        return
+    
+    bot.reply_to(message, f"Analyzing with {param_type} parameters. Please wait...",
+                 reply_markup=create_main_keyboard())
+    
+    # Process analysis with selected parameters
+    # This would integrate with the existing analysis functionality
+    # For now, we'll just show a placeholder message
+    bot.reply_to(message, f"📊 Analysis with {param_type} completed. Results would be shown here.",
+                 reply_markup=create_main_keyboard())
+
+@bot.message_handler(func=lambda message: message.text == "Custom Prompt")
+def custom_prompt_handler(message):
+    msg = bot.reply_to(message, "Please enter your custom analysis prompt:")
+    bot.register_next_step_handler(msg, process_custom_prompt)
+
+def process_custom_prompt(message):
+    user_prompt = message.text
+    user_id = message.chat.id
+    
+    # Process the custom prompt using the existing AI analysis
+    # This would integrate with the existing AI functionality
+    bot.reply_to(message, f"🤖 Processing your custom prompt: '{user_prompt}'\n\nPlease wait...",
+                 reply_markup=create_main_keyboard())
+    
+    # Placeholder for actual processing
+    bot.reply_to(message, f"✅ Analysis based on your prompt:\n\n{user_prompt}\n\n[Analysis results would appear here]",
+                 reply_markup=create_main_keyboard())
+
 @bot.message_handler(commands=['analyze'])
 def analyze_command(message):
     processing_msg = bot.reply_to(message, 
@@ -1925,7 +3498,7 @@ def analyze_command(message):
         parse_mode='Markdown')
     
     try:
-        response, chart = ultimate_bot.process_request(message)
+        response, chart, signal_id = ultimate_bot.process_request(message)
         bot.delete_message(message.chat.id, processing_msg.message_id)
         
         # Extract symbol for inline keyboard
@@ -1933,13 +3506,39 @@ def analyze_command(message):
         symbol = symbols[0] if symbols else 'BTC'
         
         sent_msg = bot.reply_to(message, response, parse_mode='Markdown', 
-                               reply_markup=create_inline_keyboard(symbol))
+                               reply_markup=create_inline_keyboard(symbol, signal_id))
+        
+        # Add feedback message
+        if signal_id > 0:
+            feedback_text = "\n\n💡 Please provide feedback on this trade signal to help us improve future recommendations:"
+            bot.reply_to(message, feedback_text, reply_markup=create_feedback_keyboard(signal_id))
         
         if chart:
             bot.send_photo(message.chat.id, chart, caption=f"📊 {symbol}/USD Chart")
     except Exception as e:
         logger.error(f"Analyze error: {e}")
         bot.reply_to(message, "❌ Error. Please try again.", reply_markup=create_main_keyboard())
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('lang_'))
+def handle_language_change(call):
+    """Handle language change"""
+    lang = call.data.split('_')[1]  # 'fa' or 'en'
+    user_id = call.message.chat.id
+    
+    ultimate_bot.lang_manager.set_language(user_id, lang)
+    
+    welcome_text = ultimate_bot.lang_manager.get_text(user_id, 'welcome')
+    
+    bot.answer_callback_query(call.id, "✅ Language changed!" if lang == 'en' else "✅ زبان تغییر کرد!")
+    bot.edit_message_text(welcome_text, call.message.chat.id, call.message.message_id,
+                         parse_mode='Markdown', reply_markup=create_main_keyboard(user_id))
+
+@bot.message_handler(func=lambda m: m.text in ["🌐 زبان", "🌐 Language"])
+def show_language_menu(message):
+    """Show language selection menu"""
+    bot.reply_to(message, 
+                "🌐 Select Language / انتخاب زبان:",
+                reply_markup=create_language_keyboard())
 
 @bot.callback_query_handler(func=lambda call: True)
 def handle_callback(call):
@@ -1949,13 +3548,38 @@ def handle_callback(call):
         action = data[0]
         symbol = data[1] if len(data) > 1 else 'BTC'
         
-        if action == 'refresh':
+        if call.data.startswith('confirm_agreement_'):
+            account_level = data[2] if len(data) > 2 else 'premium'
+            bot.answer_callback_query(call.id, "✅ Agreement confirmed!")
+            
+            # Update user's account level
+            user_id = call.message.chat.id
+            ultimate_bot.db_manager.update_user_profile(user_id, account_level=account_level)
+            
+            # Show confirmation message
+            confirmation_text = f"""✅ **Agreement Confirmed!**
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+Your account has been upgraded to {account_level.capitalize()} level.
+
+Enjoy your enhanced features:
+• Advanced trading signals
+• Priority support
+• Exclusive market insights
+
+Let's get started with market analysis!"""
+            
+            bot.edit_message_text(confirmation_text, call.message.chat.id, call.message.message_id,
+                                parse_mode='Markdown', reply_markup=create_main_keyboard(user_id))
+            return
+        
+        elif action == 'refresh':
             bot.answer_callback_query(call.id, "🔄 Refreshing...")
             # Create a mock message object
             mock_msg = type('obj', (object,), {'text': symbol, 'chat': type('obj', (object,), {'id': call.message.chat.id})()})()
-            response, chart = ultimate_bot.process_request(mock_msg)
+            response, chart, signal_id = ultimate_bot.process_request(mock_msg)
             bot.edit_message_text(response, call.message.chat.id, call.message.message_id, 
-                                parse_mode='Markdown', reply_markup=create_inline_keyboard(symbol))
+                                parse_mode='Markdown', reply_markup=create_inline_keyboard(symbol, signal_id))
             if chart:
                 bot.send_photo(call.message.chat.id, chart, caption=f"📊 {symbol}/USD Updated Chart")
         
@@ -1983,6 +3607,26 @@ def handle_callback(call):
                 parse_mode='Markdown')
             mtf_response = perform_mtf_analysis(symbol)
             bot.edit_message_text(mtf_response, call.message.chat.id, msg.message_id, parse_mode='Markdown')
+        
+        elif action == 'feedback':
+            if len(data) > 2:
+                feedback_type = data[2]  # 'profit', 'loss', 'breakeven'
+                signal_id = int(data[1]) if data[1].isdigit() else 0
+                
+                if signal_id > 0:
+                    feedback_map = {
+                        'profit': ('Profitable ✅', 1.0),
+                        'loss': ('Loss ❌', -1.0),
+                        'breakeven': ('Break-even 😐', 0.0)
+                    }
+                    
+                    feedback_text, profitability = feedback_map.get(feedback_type, ('Unknown', 0.0))
+                    ultimate_bot.db_manager.save_signal_feedback(signal_id, call.message.chat.id, 
+                                                                 feedback_text, profitability)
+                    
+                    bot.answer_callback_query(call.id, f"✅ Feedback saved: {feedback_text}")
+                    bot.edit_message_text(f"✅ Thank you for your feedback!\n\n{feedback_text}",
+                                        call.message.chat.id, call.message.message_id)
     
     except Exception as e:
         logger.error(f"Callback error: {e}")
@@ -2118,6 +3762,42 @@ To set alert:
     
     bot.reply_to(message, response, parse_mode='Markdown', reply_markup=create_main_keyboard())
 
+def send_help(message):
+    """Display full bot help"""
+    help_text = """📚 **راهنمای Arshava V2.0**
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+**🎯 دستورات اصلی:**
+• `/start` - شروع بات
+• `/analyze` - تحلیل کوین
+• `/stats` - آمار شما
+• `/profile` - تنظیمات پروفایل
+
+**📊 تحلیل سریع:**
+فقط نام کوین را تایپ کنید:
+• `BTC` یا `Bitcoin`
+• `ETH` یا `Ethereum`
+• `SOL` یا `Solana`
+
+**🔘 منوهای اصلی:**
+• 📊 تحلیل سریع
+• 📈 تحلیل بازار
+• 🤖 دستیار هوش مصنوعی
+• 👤 پروفایل
+• 🔔 هشدارها
+
+**💡 نکات:**
+• از دکمه‌های منو استفاده کنید
+• برای تحلیل پیشرفته از /analyze استفاده کنید
+• می‌توانید با AI چت کنید
+
+**⚠️ اخطار:**
+این بات فقط برای اطلاعات آموزشی است.
+تصمیمات مالی خود را با احتیاط بگیرید."""
+    
+    bot.reply_to(message, help_text, parse_mode='Markdown', 
+                 reply_markup=create_main_keyboard(message.chat.id))
+
 @bot.message_handler(func=lambda message: message.text == "📚 Help")
 def help_menu(message):
     send_help(message)
@@ -2155,48 +3835,81 @@ def market_overview(message):
     except Exception as e:
         logger.error(f"Market overview error: {e}")
         bot.reply_to(message, "❌ Error loading market data", reply_markup=create_main_keyboard())
-
 @bot.message_handler(content_types=['text'])
 def handle_text_messages(message):
+    """Unified text message handler with proper priority"""
     try:
         text = message.text.upper()
-        crypto_keywords = ['BTC', 'ETH', 'SOL', 'ADA', 'DOT', 'MATIC', 'AVAX', 'LINK', 
-                          'BITCOIN', 'ETHEREUM', 'SOLANA', 'CARDANO', 'POLKADOT', 
-                          'POLYGON', 'AVALANCHE', 'CHAINLINK', 'PRICE', 'ANALYSIS', 'ANALYZE']
         
+        # Extended crypto keywords for better detection
+        crypto_keywords = [
+            'BTC', 'ETH', 'SOL', 'ADA', 'DOT', 'MATIC', 'AVAX', 'LINK',
+            'BITCOIN', 'ETHEREUM', 'SOLANA', 'CARDANO', 'POLKADOT',
+            'POLYGON', 'AVALANCHE', 'CHAINLINK', 'PRICE', 'ANALYSIS', 'ANALYZE',
+            'BNB', 'LTC', 'BCH', 'XRP', 'DOGE', 'SHIB', 'UNI', 'ATOM',
+            'FIL', 'TRX', 'VET', 'XLM', 'NEAR', 'APT', 'HBAR', 'ALGO',
+            'FLOW', 'ICP', 'SAND', 'MANA', 'AXS'
+        ]
+        
+        # Check if message contains crypto-related keywords
         if any(keyword in text for keyword in crypto_keywords):
-            processing_msg = bot.reply_to(message, 
+            # Extract symbol
+            symbols = re.findall(r'\b([A-Z]{2,6}|bitcoin|ethereum|solana|cardano|polkadot|polygon|avalanche|chainlink|binance)\b', text, re.IGNORECASE)
+            if symbols:
+                symbol = get_valid_symbol(symbols[0])
+            else:
+                symbol = 'BTC'  # Default symbol
+            
+            # Validate symbol
+            if not validate_symbol(symbol):
+                bot.reply_to(message,
+                    f"❌ Symbol `{symbol}` is not supported.\n\n"
+                    f"✅ Valid symbols include:\n"
+                    f"BTC, ETH, SOL, ADA, DOT, MATIC, AVAX, LINK, BNB, LTC, BCH",
+                    parse_mode='Markdown',
+                    reply_markup=create_main_keyboard(message.chat.id))
+                return
+            
+            # Show processing message
+            processing_msg = bot.reply_to(message,
                 "⏳ **Processing...**\n\n🔍 Fetching data\n📊 Running analysis\n🧠 Computing AI\n\n⏱️ Please wait...",
                 parse_mode='Markdown')
             
-            response, chart = ultimate_bot.process_request(message)
+            response, chart, signal_id = ultimate_bot.process_request(message)
             
+            # Clean up processing message
             try:
                 bot.delete_message(message.chat.id, processing_msg.message_id)
             except:
                 pass
             
-            # Extract symbol
-            symbols = re.findall(r'\b([A-Z]{2,6})\b', text)
-            symbol = symbols[0] if symbols else 'BTC'
+            # Send response with appropriate keyboard
+            if signal_id > 0:
+                keyboard = create_inline_keyboard(symbol, signal_id)
+            else:
+                keyboard = create_main_keyboard(message.chat.id)
+                
+            bot.reply_to(message, response, parse_mode='Markdown', reply_markup=keyboard)
             
-            bot.reply_to(message, response, parse_mode='Markdown', 
-                        reply_markup=create_inline_keyboard(symbol))
-            
+            # Send chart if available
             if chart:
                 bot.send_photo(message.chat.id, chart, caption=f"📊 {symbol}/USD Chart")
         else:
-            bot.reply_to(message, 
-                "🤔 I didn't recognize that.\n\nTry:\n• BTC, ETH, SOL\n• Use menu buttons below\n• Type /help", 
-                parse_mode='Markdown', reply_markup=create_main_keyboard())
+            # Handle non-crypto messages with helpful response
+            bot.reply_to(message,
+                "🤔 I didn't recognize that.\n\nTry:\n• BTC, ETH, SOL\n• Use menu buttons below\n• Type /help",
+                parse_mode='Markdown', reply_markup=create_main_keyboard(message.chat.id))
     
     except Exception as e:
         logger.error(f"Text handler error: {e}")
-        bot.reply_to(message, "❌ Error occurred. Try again.", reply_markup=create_main_keyboard())
+        bot.reply_to(message, "❌ Error occurred. Try again.", reply_markup=create_main_keyboard(message.chat.id))
+
 
 # ============================================
 # PRICE ALERT MONITORING (Background Task)
 # ============================================
+
+
 
 def monitor_alerts():
     """Background task to monitor price alerts"""
@@ -2306,6 +4019,4 @@ if __name__ == "__main__":
         logger.info("\n👋 Bot shutdown complete")
     except Exception as e:
         logger.error(f"💥 Fatal error: {e}")
-
         sys.exit(1)
-

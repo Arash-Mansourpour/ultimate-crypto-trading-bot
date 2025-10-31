@@ -1,0 +1,309 @@
+2025-10-31 21:43:28,121 - googleapiclient.discovery_cache - INFO - file_cache is only supported with oauth2client<4.0.0
+2025-10-31 21:43:28,126 - googleapiclient.discovery_cache - INFO - file_cache is only supported with oauth2client<4.0.0
+2025-10-31 21:43:28,150 - __main__ - INFO - Database tables and indexes created successfully
+2025-10-31 21:43:29,152 - __main__ - INFO - ======================================================================
+2025-10-31 21:43:29,152 - __main__ - INFO - 🚀 STARTING ARSHAVA V2.0 - ULTIMATE CRYPTO TRADING BOT
+2025-10-31 21:43:29,153 - __main__ - INFO - ======================================================================
+2025-10-31 21:43:29,154 - __main__ - INFO - 
+📡 Data Sources:
+2025-10-31 21:43:29,154 - __main__ - INFO -   ✓ Binance API (Primary)
+2025-10-31 21:43:29,154 - __main__ - INFO -   ✓ CryptoCompare (Backup)
+2025-10-31 21:43:29,154 - __main__ - INFO -   ✓ CoinGecko (Backup)
+2025-10-31 21:43:29,154 - __main__ - INFO - 
+🧠 Advanced Features:
+2025-10-31 21:43:29,154 - __main__ - INFO -   ✓ Smart Money Concepts (SMC)
+2025-10-31 21:43:29,154 - __main__ - INFO -   ✓ Volume Spread Analysis (VSA)
+2025-10-31 21:43:29,154 - __main__ - INFO -   ✓ Wyckoff Method
+2025-10-31 21:43:29,154 - __main__ - INFO -   ✓ Machine Learning Predictions
+2025-10-31 21:43:29,154 - __main__ - INFO -   ✓ Backtesting Engine
+2025-10-31 21:43:29,154 - __main__ - INFO -   ✓ On-chain Metrics
+2025-10-31 21:43:29,154 - __main__ - INFO -   ✓ Social Sentiment Analysis
+2025-10-31 21:43:29,154 - __main__ - INFO - 
+📊 Technical Indicators:
+2025-10-31 21:43:29,154 - __main__ - INFO -   ✓ RSI, MACD, Bollinger Bands
+2025-10-31 21:43:29,154 - __main__ - INFO -   ✓ Ichimoku Cloud
+2025-10-31 21:43:29,154 - __main__ - INFO -   ✓ Elder's Force Index (EFI)
+2025-10-31 21:43:29,154 - __main__ - INFO -   ✓ On-Balance Volume (OBV)
+2025-10-31 21:43:29,154 - __main__ - INFO -   ✓ Fibonacci Retracements
+2025-10-31 21:43:29,154 - __main__ - INFO -   ✓ Elliott Wave Patterns
+2025-10-31 21:43:29,154 - __main__ - INFO -   ✓ Heiken Ashi Candles
+2025-10-31 21:43:29,154 - __main__ - INFO -   ✓ Volume Profile (POC/VAH/VAL)
+2025-10-31 21:43:29,154 - __main__ - INFO - 
+🎨 UI/UX Features:
+2025-10-31 21:43:29,154 - __main__ - INFO -   ✓ Inline Keyboards
+2025-10-31 21:43:29,155 - __main__ - INFO -   ✓ Quick Reply Buttons
+2025-10-31 21:43:29,155 - __main__ - INFO -   ✓ Interactive Charts
+2025-10-31 21:43:29,155 - __main__ - INFO -   ✓ Price Alerts
+2025-10-31 21:43:29,155 - __main__ - INFO -   ✓ Multi-Timeframe Analysis
+2025-10-31 21:43:29,155 - __main__ - INFO - 
+🧪 Testing connections...
+2025-10-31 21:43:30,084 - __main__ - INFO - Cached price data for ['BTC']: 1 symbols
+2025-10-31 21:43:30,084 - __main__ - INFO -   ✅ Price API: BTC = $109414.2
+2025-10-31 21:43:30,084 - __main__ - INFO - Fetching from Binance...
+2025-10-31 21:43:30,976 - __main__ - INFO - ✅ Binance: 100 candles
+2025-10-31 21:43:30,976 - __main__ - INFO -   ✅ OHLCV API: 100 candles
+2025-10-31 21:43:30,976 - __main__ - INFO -      Latest: $109,414.50
+2025-10-31 21:43:31,592 - __main__ - INFO -   ✅ Fear & Greed: 29/100
+2025-10-31 21:43:31,592 - __main__ - INFO - 
+======================================================================
+2025-10-31 21:43:31,592 - __main__ - INFO - ✅ ALL SYSTEMS READY - ARSHAVA V2.0 ONLINE
+2025-10-31 21:43:31,592 - __main__ - INFO - ======================================================================
+2025-10-31 21:43:31,592 - __main__ - INFO - 
+🤖 Bot active and waiting for commands...
+2025-10-31 21:43:31,592 - __main__ - INFO - 📱 Users can interact via Telegram
+2025-10-31 21:43:31,592 - __main__ - INFO - 🔄 Press Ctrl+C to stop
+
+2025-10-31 21:43:33,497 - __main__ - INFO - Fetching from Binance...
+2025-10-31 21:43:33,889 - __main__ - INFO - Fetching from Binance...
+2025-10-31 21:43:33,909 - __main__ - INFO - ✅ Binance: 200 candles
+2025-10-31 21:43:33,909 - __main__ - INFO - Searching news for: BTC price cryptocurrency news
+2025-10-31 21:43:34,784 - __main__ - WARNING - ❌ Binance failed: 400 Client Error: Bad Request for url: https://api.binance.com/api/v3/klines?symbol=STARTUSDT&interval=1d&limit=200
+2025-10-31 21:43:34,784 - __main__ - INFO - Fetching from CryptoCompare...
+2025-10-31 21:43:34,784 - __main__ - WARNING - ❌ CryptoCompare failed: Symbol START not supported
+2025-10-31 21:43:34,784 - __main__ - INFO - Fetching from CoinGecko...
+2025-10-31 21:43:34,784 - __main__ - WARNING - ❌ CoinGecko failed: Symbol START not supported
+2025-10-31 21:43:34,937 - __main__ - ERROR - News search error: <HttpError 400 when requesting https://customsearch.googleapis.com/customsearch/v1?q=BTC+price+cryptocurrency+news&cx=d504953928a9f428f&num=5&dateRestrict=d7&key=AIzaSyA8NV_u2tlPSRY8-jFanhW1AFby-wlA7Qs&alt=json returned "Request contains an invalid argument.". Details: "[{'message': 'Request contains an invalid argument.', 'domain': 'global', 'reason': 'badRequest'}]">
+2025-10-31 21:43:35,925 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2025-10-31 21:43:35,925 - __main__ - ERROR - AI analysis error: Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}
+2025-10-31 21:46:24,012 - googleapiclient.discovery_cache - INFO - file_cache is only supported with oauth2client<4.0.0
+2025-10-31 21:46:24,016 - googleapiclient.discovery_cache - INFO - file_cache is only supported with oauth2client<4.0.0
+2025-10-31 21:46:24,044 - __main__ - INFO - Database tables and indexes created successfully
+2025-10-31 21:46:25,197 - __main__ - INFO - ======================================================================
+2025-10-31 21:46:25,197 - __main__ - INFO - 🚀 STARTING ARSHAVA V2.0 - ULTIMATE CRYPTO TRADING BOT
+2025-10-31 21:46:25,197 - __main__ - INFO - ======================================================================
+2025-10-31 21:46:25,197 - __main__ - INFO - 
+📡 Data Sources:
+2025-10-31 21:46:25,197 - __main__ - INFO -   ✓ Binance API (Primary)
+2025-10-31 21:46:25,197 - __main__ - INFO -   ✓ CryptoCompare (Backup)
+2025-10-31 21:46:25,197 - __main__ - INFO -   ✓ CoinGecko (Backup)
+2025-10-31 21:46:25,197 - __main__ - INFO - 
+🧠 Advanced Features:
+2025-10-31 21:46:25,197 - __main__ - INFO -   ✓ Smart Money Concepts (SMC)
+2025-10-31 21:46:25,198 - __main__ - INFO -   ✓ Volume Spread Analysis (VSA)
+2025-10-31 21:46:25,198 - __main__ - INFO -   ✓ Wyckoff Method
+2025-10-31 21:46:25,198 - __main__ - INFO -   ✓ Machine Learning Predictions
+2025-10-31 21:46:25,198 - __main__ - INFO -   ✓ Backtesting Engine
+2025-10-31 21:46:25,198 - __main__ - INFO -   ✓ On-chain Metrics
+2025-10-31 21:46:25,198 - __main__ - INFO -   ✓ Social Sentiment Analysis
+2025-10-31 21:46:25,198 - __main__ - INFO - 
+📊 Technical Indicators:
+2025-10-31 21:46:25,198 - __main__ - INFO -   ✓ RSI, MACD, Bollinger Bands
+2025-10-31 21:46:25,198 - __main__ - INFO -   ✓ Ichimoku Cloud
+2025-10-31 21:46:25,198 - __main__ - INFO -   ✓ Elder's Force Index (EFI)
+2025-10-31 21:46:25,198 - __main__ - INFO -   ✓ On-Balance Volume (OBV)
+2025-10-31 21:46:25,198 - __main__ - INFO -   ✓ Fibonacci Retracements
+2025-10-31 21:46:25,198 - __main__ - INFO -   ✓ Elliott Wave Patterns
+2025-10-31 21:46:25,198 - __main__ - INFO -   ✓ Heiken Ashi Candles
+2025-10-31 21:46:25,198 - __main__ - INFO -   ✓ Volume Profile (POC/VAH/VAL)
+2025-10-31 21:46:25,198 - __main__ - INFO - 
+🎨 UI/UX Features:
+2025-10-31 21:46:25,198 - __main__ - INFO -   ✓ Inline Keyboards
+2025-10-31 21:46:25,198 - __main__ - INFO -   ✓ Quick Reply Buttons
+2025-10-31 21:46:25,198 - __main__ - INFO -   ✓ Interactive Charts
+2025-10-31 21:46:25,198 - __main__ - INFO -   ✓ Price Alerts
+2025-10-31 21:46:25,198 - __main__ - INFO -   ✓ Multi-Timeframe Analysis
+2025-10-31 21:46:25,198 - __main__ - INFO - 
+🧪 Testing connections...
+2025-10-31 21:46:26,063 - __main__ - INFO - Cached price data for ['BTC']: 1 symbols
+2025-10-31 21:46:26,063 - __main__ - INFO -   ✅ Price API: BTC = $109285.22
+2025-10-31 21:46:26,063 - __main__ - INFO - Fetching from Binance...
+2025-10-31 21:46:26,886 - __main__ - INFO - ✅ Binance: 100 candles
+2025-10-31 21:46:26,886 - __main__ - INFO -   ✅ OHLCV API: 100 candles
+2025-10-31 21:46:26,886 - __main__ - INFO -      Latest: $109,285.21
+2025-10-31 21:46:27,473 - __main__ - INFO -   ✅ Fear & Greed: 29/100
+2025-10-31 21:46:27,473 - __main__ - INFO - 
+======================================================================
+2025-10-31 21:46:27,473 - __main__ - INFO - ✅ ALL SYSTEMS READY - ARSHAVA V2.0 ONLINE
+2025-10-31 21:46:27,473 - __main__ - INFO - ======================================================================
+2025-10-31 21:46:27,473 - __main__ - INFO - 
+🤖 Bot active and waiting for commands...
+2025-10-31 21:46:27,474 - __main__ - INFO - 📱 Users can interact via Telegram
+2025-10-31 21:46:27,474 - __main__ - INFO - 🔄 Press Ctrl+C to stop
+
+2025-10-31 21:48:31,697 - TeleBot - ERROR - Threaded polling exception: A request to the Telegram API was unsuccessful. Error code: 409. Description: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2025-10-31 21:48:31,698 - TeleBot - ERROR - Exception traceback:
+Traceback (most recent call last):
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\__init__.py", line 1234, in __threaded_polling
+    polling_thread.raise_exceptions()
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\util.py", line 111, in raise_exceptions
+    raise self.exception_info
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\util.py", line 93, in run
+    task(*args, **kwargs)
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\__init__.py", line 688, in __retrieve_updates
+    updates = self.get_updates(offset=(self.last_update_id + 1),
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\__init__.py", line 660, in get_updates
+    json_updates = apihelper.get_updates(
+                   ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\apihelper.py", line 330, in get_updates
+    return _make_request(token, method_url, params=payload)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\apihelper.py", line 168, in _make_request
+    json_result = _check_result(method_name, result)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\apihelper.py", line 195, in _check_result
+    raise ApiTelegramException(method_name, result, result_json)
+telebot.apihelper.ApiTelegramException: A request to the Telegram API was unsuccessful. Error code: 409. Description: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+
+2025-10-31 21:48:37,631 - TeleBot - ERROR - Threaded polling exception: A request to the Telegram API was unsuccessful. Error code: 409. Description: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2025-10-31 21:48:37,631 - TeleBot - ERROR - Exception traceback:
+Traceback (most recent call last):
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\__init__.py", line 1234, in __threaded_polling
+    polling_thread.raise_exceptions()
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\util.py", line 111, in raise_exceptions
+    raise self.exception_info
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\util.py", line 93, in run
+    task(*args, **kwargs)
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\__init__.py", line 688, in __retrieve_updates
+    updates = self.get_updates(offset=(self.last_update_id + 1),
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\__init__.py", line 660, in get_updates
+    json_updates = apihelper.get_updates(
+                   ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\apihelper.py", line 330, in get_updates
+    return _make_request(token, method_url, params=payload)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\apihelper.py", line 168, in _make_request
+    json_result = _check_result(method_name, result)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\apihelper.py", line 195, in _check_result
+    raise ApiTelegramException(method_name, result, result_json)
+telebot.apihelper.ApiTelegramException: A request to the Telegram API was unsuccessful. Error code: 409. Description: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+
+2025-10-31 21:48:43,985 - TeleBot - ERROR - Threaded polling exception: A request to the Telegram API was unsuccessful. Error code: 409. Description: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2025-10-31 21:48:43,986 - TeleBot - ERROR - Exception traceback:
+Traceback (most recent call last):
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\__init__.py", line 1234, in __threaded_polling
+    polling_thread.raise_exceptions()
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\util.py", line 111, in raise_exceptions
+    raise self.exception_info
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\util.py", line 93, in run
+    task(*args, **kwargs)
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\__init__.py", line 688, in __retrieve_updates
+    updates = self.get_updates(offset=(self.last_update_id + 1),
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\__init__.py", line 660, in get_updates
+    json_updates = apihelper.get_updates(
+                   ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\apihelper.py", line 330, in get_updates
+    return _make_request(token, method_url, params=payload)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\apihelper.py", line 168, in _make_request
+    json_result = _check_result(method_name, result)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\apihelper.py", line 195, in _check_result
+    raise ApiTelegramException(method_name, result, result_json)
+telebot.apihelper.ApiTelegramException: A request to the Telegram API was unsuccessful. Error code: 409. Description: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+
+2025-10-31 21:48:46,588 - __main__ - INFO - Fetching from Binance...
+2025-10-31 21:48:46,992 - __main__ - WARNING - ❌ Binance failed: 400 Client Error: Bad Request for url: https://api.binance.com/api/v3/klines?symbol=STARTUSDT&interval=1d&limit=200
+2025-10-31 21:48:46,992 - __main__ - INFO - Fetching from CryptoCompare...
+2025-10-31 21:48:46,992 - __main__ - WARNING - ❌ CryptoCompare failed: Symbol START not supported
+2025-10-31 21:48:46,992 - __main__ - INFO - Fetching from CoinGecko...
+2025-10-31 21:48:46,992 - __main__ - WARNING - ❌ CoinGecko failed: Symbol START not supported
+2025-10-31 21:48:51,887 - TeleBot - ERROR - Threaded polling exception: A request to the Telegram API was unsuccessful. Error code: 409. Description: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2025-10-31 21:48:51,887 - TeleBot - ERROR - Exception traceback:
+Traceback (most recent call last):
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\__init__.py", line 1234, in __threaded_polling
+    polling_thread.raise_exceptions()
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\util.py", line 111, in raise_exceptions
+    raise self.exception_info
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\util.py", line 93, in run
+    task(*args, **kwargs)
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\__init__.py", line 688, in __retrieve_updates
+    updates = self.get_updates(offset=(self.last_update_id + 1),
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\__init__.py", line 660, in get_updates
+    json_updates = apihelper.get_updates(
+                   ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\apihelper.py", line 330, in get_updates
+    return _make_request(token, method_url, params=payload)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\apihelper.py", line 168, in _make_request
+    json_result = _check_result(method_name, result)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\apihelper.py", line 195, in _check_result
+    raise ApiTelegramException(method_name, result, result_json)
+telebot.apihelper.ApiTelegramException: A request to the Telegram API was unsuccessful. Error code: 409. Description: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+
+2025-10-31 21:48:58,065 - TeleBot - ERROR - Threaded polling exception: A request to the Telegram API was unsuccessful. Error code: 409. Description: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2025-10-31 21:48:58,066 - TeleBot - ERROR - Exception traceback:
+Traceback (most recent call last):
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\__init__.py", line 1234, in __threaded_polling
+    polling_thread.raise_exceptions()
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\util.py", line 111, in raise_exceptions
+    raise self.exception_info
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\util.py", line 93, in run
+    task(*args, **kwargs)
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\__init__.py", line 688, in __retrieve_updates
+    updates = self.get_updates(offset=(self.last_update_id + 1),
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\__init__.py", line 660, in get_updates
+    json_updates = apihelper.get_updates(
+                   ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\apihelper.py", line 330, in get_updates
+    return _make_request(token, method_url, params=payload)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\apihelper.py", line 168, in _make_request
+    json_result = _check_result(method_name, result)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\apihelper.py", line 195, in _check_result
+    raise ApiTelegramException(method_name, result, result_json)
+telebot.apihelper.ApiTelegramException: A request to the Telegram API was unsuccessful. Error code: 409. Description: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+
+2025-10-31 21:49:00,723 - __main__ - INFO - Fetching from Binance...
+2025-10-31 21:49:01,082 - __main__ - WARNING - ❌ Binance failed: 400 Client Error: Bad Request for url: https://api.binance.com/api/v3/klines?symbol=HIUSDT&interval=1d&limit=200
+2025-10-31 21:49:01,082 - __main__ - INFO - Fetching from CryptoCompare...
+2025-10-31 21:49:01,083 - __main__ - WARNING - ❌ CryptoCompare failed: Symbol HI not supported
+2025-10-31 21:49:01,083 - __main__ - INFO - Fetching from CoinGecko...
+2025-10-31 21:49:01,083 - __main__ - WARNING - ❌ CoinGecko failed: Symbol HI not supported
+2025-10-31 21:49:05,061 - TeleBot - ERROR - Threaded polling exception: A request to the Telegram API was unsuccessful. Error code: 409. Description: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2025-10-31 21:49:05,062 - TeleBot - ERROR - Exception traceback:
+Traceback (most recent call last):
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\__init__.py", line 1234, in __threaded_polling
+    polling_thread.raise_exceptions()
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\util.py", line 111, in raise_exceptions
+    raise self.exception_info
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\util.py", line 93, in run
+    task(*args, **kwargs)
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\__init__.py", line 688, in __retrieve_updates
+    updates = self.get_updates(offset=(self.last_update_id + 1),
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\__init__.py", line 660, in get_updates
+    json_updates = apihelper.get_updates(
+                   ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\apihelper.py", line 330, in get_updates
+    return _make_request(token, method_url, params=payload)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\apihelper.py", line 168, in _make_request
+    json_result = _check_result(method_name, result)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\apihelper.py", line 195, in _check_result
+    raise ApiTelegramException(method_name, result, result_json)
+telebot.apihelper.ApiTelegramException: A request to the Telegram API was unsuccessful. Error code: 409. Description: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+
+2025-10-31 21:49:10,905 - TeleBot - ERROR - Threaded polling exception: A request to the Telegram API was unsuccessful. Error code: 409. Description: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2025-10-31 21:49:10,905 - TeleBot - ERROR - Exception traceback:
+Traceback (most recent call last):
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\__init__.py", line 1234, in __threaded_polling
+    polling_thread.raise_exceptions()
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\util.py", line 111, in raise_exceptions
+    raise self.exception_info
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\util.py", line 93, in run
+    task(*args, **kwargs)
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\__init__.py", line 688, in __retrieve_updates
+    updates = self.get_updates(offset=(self.last_update_id + 1),
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\__init__.py", line 660, in get_updates
+    json_updates = apihelper.get_updates(
+                   ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\apihelper.py", line 330, in get_updates
+    return _make_request(token, method_url, params=payload)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\apihelper.py", line 168, in _make_request
+    json_result = _check_result(method_name, result)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ira\AppData\Local\Programs\Python\Python312\Lib\site-packages\telebot\apihelper.py", line 195, in _check_result
+    raise ApiTelegramException(method_name, result, result_json)
+telebot.apihelper.ApiTelegramException: A request to the Telegram API was unsuccessful. Error code: 409. Description: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+
