@@ -13,7 +13,7 @@ Demo 1
 
 Demo 2
 
-🎥 Watch crypto2.mp4
+🎥 Watch crypto2.mp4: https://github.com/Arash-Mansourpour/ultimate-crypto-trading-bot/blob/main/crypto2.mp4
 
 ## Key Features
 
