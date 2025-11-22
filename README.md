@@ -7,6 +7,14 @@
 
 A sophisticated Telegram bot designed for in-depth cryptocurrency analysis and trading signals. Powered by advanced AI, multi-source data integration, and comprehensive technical tools, this bot empowers traders with actionable insights, risk management, and real-time market intelligence.
 
+Demo 1
+
+🎥 Watch crypto1.mp4
+
+Demo 2
+
+🎥 Watch crypto2.mp4
+
 ## Key Features
 
 - **Multi-Source Data Fetching**: Seamlessly retrieves OHLCV data from multiple reliable sources including Binance, Yahoo Finance, CryptoCompare, CoinGecko, Coinbase, and Kraken, with automatic fallback and data imputation for robustness.
