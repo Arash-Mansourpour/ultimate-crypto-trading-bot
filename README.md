@@ -9,7 +9,7 @@ A sophisticated Telegram bot designed for in-depth cryptocurrency analysis and t
 
 Demo 1
 
-🎥 Watch crypto1.mp4
+🎥 Watch crypto1.mp4: https://github.com/Arash-Mansourpour/ultimate-crypto-trading-bot/blob/main/crypto1.mp4
 
 Demo 2
 
